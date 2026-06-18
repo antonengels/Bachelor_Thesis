@@ -5,11 +5,11 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 OUTPUT_DIR = BASE_DIR / 'output'
-PROCESSED_EXPORT = OUTPUT_DIR / 'export_processed.csv'
+GRADIENT_EXPORT = OUTPUT_DIR / 'A_GRADIENT.csv'
 PLOT_PATH = OUTPUT_DIR / 'plot.png'
 
 # CSV einlesen
-df = pd.read_csv(PROCESSED_EXPORT)
+df = pd.read_csv(GRADIENT_EXPORT)
 
 # Timestamp und grad[0] numerisch machen
 df['timestamp'] = pd.to_numeric(df['timestamp'], errors='coerce')

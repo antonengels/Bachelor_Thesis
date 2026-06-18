@@ -7,98 +7,122 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 INPUT_DIR = BASE_DIR / 'input'
 OUTPUT_DIR = BASE_DIR / 'output'
 INPUT_PCAP = INPUT_DIR / '20260508_merged.pcapng'
-RAW_EXPORT = OUTPUT_DIR / 'export.csv'
-PROCESSED_EXPORT = OUTPUT_DIR / 'export_processed.csv'
+GRADIENT_EXPORT = OUTPUT_DIR / 'A_GRADIENT.csv'
+RTBRQ_EXPORT = OUTPUT_DIR / 'M_ATO_RTBRq.csv'
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# Schritt 1: tshark ausführen
-print("🔄 Starte tshark-Export...")
-tshark_cmd = [
-    'tshark',
-    '-r', str(INPUT_PCAP),
-    '-Y', 'aoecl.header.NID_PACKET == 6',
-    '-T', 'fields',
-    '-E', 'header=y',
-    '-E', 'separator=,',
-    '-e', 'frame.time_epoch',
-    '-e', 'aoecl.userdata.nid6.A_GRADIENT'
-]
 
-with open(RAW_EXPORT, 'w') as f:
-    result = subprocess.run(tshark_cmd, stdout=f, stderr=subprocess.PIPE, text=True)
+def run_tshark_export(display_filter: str, field_name: str) -> list[str]:
+    tshark_cmd = [
+        'tshark',
+        '-r', str(INPUT_PCAP),
+        '-Y', display_filter,
+        '-T', 'fields',
+        '-e', 'frame.time_epoch',
+        '-e', field_name,
+    ]
+
+    result = subprocess.run(tshark_cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        print(f"❌ tshark Fehler: {result.stderr}")
-        exit(1)
+        print(f"tshark Fehler fuer {field_name}: {result.stderr}")
+        raise SystemExit(1)
 
-print("✓ tshark Export abgeschlossen")
+    return [line for line in result.stdout.splitlines() if line.strip()]
 
-# Schritt 2: CSV mit manuelem Parsing lesen (wegen der komplexen Kommas)
-print("🔄 Verarbeite CSV...")
-timestamps = []
-gradients = []
 
-with open(RAW_EXPORT) as f:
-    lines = f.readlines()
-    
-    for i, line in enumerate(lines):
-        if i == 0:  # Header überspringen
+def parse_timestamp(raw_value: str) -> int | None:
+    try:
+        # frame.time_epoch ist die Arrival Time in Sekunden; fuer den Workflow weiter in us.
+        return int(float(raw_value) * 1_000_000)
+    except (TypeError, ValueError):
+        return None
+
+
+def build_gradient_export() -> pd.DataFrame:
+    print("Verarbeite A_GRADIENT...")
+    lines = run_tshark_export('aoecl.header.NID_PACKET == 6', 'aoecl.userdata.nid6.A_GRADIENT')
+
+    timestamps = []
+    grad_values = []
+
+    for line in lines:
+        parts = line.split('\t', 1)
+        timestamp = parse_timestamp(parts[0])
+        if timestamp is None:
             continue
-        
-        # Erste Spalte (bis erstes Komma außerhalb von Escape)
-        parts = line.strip().split(',', 1)  # Nur beim ersten Komma splitten
-        
-        if len(parts) == 2:
-            # frame.time_epoch ist in Sekunden; fuer den restlichen Workflow in us umrechnen
-            timestamps.append(int(float(parts[0]) * 1_000_000))
-            gradients.append(parts[1])
-        elif len(parts) == 1:
-            timestamps.append(int(float(parts[0]) * 1_000_000))
-            gradients.append('')
 
-# Die gradient Spalte in einzelne grad-Spalten aufteilen
-grad_values = []
-
-for gradient_str in gradients:
-    # Werte parsen
-    if gradient_str == '':
-        values = []
-    else:
-        # String wird geparst - Escape-Kommas entfernen (\, → ,)
+        gradient_str = parts[1] if len(parts) == 2 else ''
         gradient_cleaned = gradient_str.replace('\\,', ',')
+
         try:
-            values = [float(x.strip()) for x in gradient_cleaned.split(',') if x.strip()]
-        except:
+            values = [float(value.strip()) for value in gradient_cleaned.split(',') if value.strip()]
+        except ValueError:
             values = []
-    
-    # Auf 10 Elemente begrenzen
-    values = values[:10]
-    
-    # Mit NaN auffüllen bis 10 Elemente
-    while len(values) < 10:
-        values.append(np.nan)
-    
-    grad_values.append(values)
 
-# DataFrame erstellen
-grad_df = pd.DataFrame(grad_values, columns=[f'grad[{i}]' for i in range(10)])
-grad_df.insert(0, 'timestamp', timestamps)
+        values = values[:10]
+        while len(values) < 10:
+            values.append(np.nan)
 
-# Wertbereich -2500 bis 2500 anwenden (außerhalb → NaN)
-for i in range(10):
-    col = f'grad[{i}]'
-    grad_df[col] = grad_df[col].apply(lambda x: x if pd.notna(x) and -2500 <= x <= 2500 else np.nan)
+        timestamps.append(timestamp)
+        grad_values.append(values)
 
-# Durch 1000 teilen
-for i in range(10):
-    col = f'grad[{i}]'
-    grad_df[col] = grad_df[col] / 1000
+    grad_df = pd.DataFrame(grad_values, columns=[f'grad[{i}]' for i in range(10)])
+    grad_df.insert(0, 'timestamp', timestamps)
 
-# Speichern
-grad_df.to_csv(PROCESSED_EXPORT, index=False)
-print("✓ CSV-Verarbeitung abgeschlossen")
-print(f"\n📊 Ergebnisse:")
-print(f"  Zeilen verarbeitet: {len(grad_df)}")
-print(f"  Output: {PROCESSED_EXPORT}")
-print(f"\nErste 5 Zeilen:")
+    for i in range(10):
+        col = f'grad[{i}]'
+        grad_df[col] = grad_df[col].apply(lambda x: x if pd.notna(x) and -2500 <= x <= 2500 else np.nan)
+        grad_df[col] = grad_df[col] / 1000
+
+    grad_df.to_csv(GRADIENT_EXPORT, index=False)
+    print(f"✓ A_GRADIENT gespeichert: {GRADIENT_EXPORT}")
+    print(f"  Zeilen verarbeitet: {len(grad_df)}")
+    return grad_df
+
+
+def normalize_rtbrq(raw_value: float) -> float:
+    if raw_value < -16384 or raw_value > 16384:
+        return np.nan
+    return raw_value / 16384
+
+
+def build_rtbrq_export() -> pd.DataFrame:
+    print("Verarbeite M_ATO_RTBRq...")
+    lines = run_tshark_export('aoecl.header.NID_PACKET == 31', 'aoecl.userdata.nid31.M_ATO_RTBRq')
+
+    rows = []
+    for line in lines:
+        parts = line.split('\t', 1)
+        timestamp = parse_timestamp(parts[0])
+        if timestamp is None:
+            continue
+
+        value_str = parts[1].strip() if len(parts) == 2 else ''
+        try:
+            raw_value = float(value_str)
+        except ValueError:
+            normalized_value = np.nan
+        else:
+            normalized_value = normalize_rtbrq(raw_value)
+
+        rows.append({'timestamp': timestamp, 'M_ATO_RTBRq': normalized_value})
+
+    rtbrq_df = pd.DataFrame(rows)
+    rtbrq_df.to_csv(RTBRQ_EXPORT, index=False)
+    print(f"✓ M_ATO_RTBRq gespeichert: {RTBRQ_EXPORT}")
+    print(f"  Zeilen verarbeitet: {len(rtbrq_df)}")
+    return rtbrq_df
+
+
+print("Starte tshark-Export...")
+grad_df = build_gradient_export()
+rtbrq_df = build_rtbrq_export()
+
+print("\nErgebnisse:")
+print(f"  Output: {GRADIENT_EXPORT}")
+print(f"  Output: {RTBRQ_EXPORT}")
+print("\nErste 5 Zeilen A_GRADIENT:")
 print(grad_df.head())
+print("\nErste 5 Zeilen M_ATO_RTBRq:")
+print(rtbrq_df.head())
