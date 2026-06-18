@@ -1,0 +1,99 @@
+\documentclass[a4paper,12pt]{article}
+
+\include{frontmatter/settings}
+
+% Bilder Verzeichnis einbinden
+\graphicspath{{images/}}
+% Literaturdatei einbinden
+\addbibresource{literature.bib}
+
+% Kopfzeile definieren
+\pagestyle{fancy}
+\fancyhead{} % Leert Kopf- und Fußzeile
+\renewcommand{\headrulewidth}{0pt}
+\fancyhead[c]{
+    \includegraphics[width=3.5cm]{hitachi} \hfill
+    \includegraphics[width=3.5cm]{dhbw}
+}
+
+% Fußzeile definieren
+\cfoot{\textbf{\thepage}}
+\pagenumbering{roman}
+
+\include{frontmatter/acronyms}
+
+% Definitionen
+\newcommand{\projName}{Entwicklung und Vortrainieren eines Reinforcement-Learning-Agenten zur Optimierung der Zuggeschwindigkeit 
+}
+
+\begin{document}
+    \selectlanguage{ngerman}
+
+    % Titelseite
+    \include{frontmatter/titlepage}
+    \newpage
+    \setcounter{page}{2}
+
+    % Erklärung
+    \include{frontmatter/erklaerung}
+    \newpage
+
+    % Zusammenfassung
+    \include{frontmatter/abstract}
+    \newpage
+
+    % Inhaltsverzeichnis
+    \tableofcontents
+
+    % Abkürzungsverzeichnis
+    {\parskip=0pt
+        \renewcommand{\glsgroupskip}{}
+        \glsaddall
+        \printglossary[type=\acronymtype,title=Abkürzungsverzeichnis]
+    }
+    \newpage
+
+    % Abbildungsverzeichnis
+    \phantomsection
+    \listoffigures
+    
+    % Tabellenverzeichnis
+    \phantomsection
+    \listoftables
+    \newpage
+    
+    % Um Konfiguration der Seitenzahl
+    \setcounter{page}{1}
+    \pagenumbering{arabic}
+
+    % Kapitel der Bachelorarbeit
+    \include{chapters/01_einleitung}
+    \newpage
+
+    \include{chapters/02_theoretische_grundlagen}
+    \newpage
+
+    \include{chapters/03_stand_der_technik}
+    \newpage
+
+    \include{chapters/04_datenbasis_preprocessing}
+    \newpage
+
+    \include{chapters/05_modellarchitektur}
+    \newpage
+
+    \include{chapters/06_implementierung_training}
+    \newpage
+
+    \include{chapters/07_evaluierung_ergebnisse}
+    \newpage
+
+    \include{chapters/08_fazit_ausblick}
+    \newpage
+
+    % Literaturverzeichnis
+    \sloppy % Lockert die Anforderungen an die Zeilenlänge
+    \raggedright
+    \printbibliography[title=Literaturverzeichnis,heading=bibnumbered]
+
+\end{document}

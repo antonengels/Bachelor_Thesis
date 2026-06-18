@@ -1,0 +1,67 @@
+% Pakete laden
+\usepackage[utf8]{inputenc} % Zeichenkodierung
+\usepackage[ngerman,english]{babel} % Sprache
+\usepackage{microtype}      % Schriftbild und den Zeilenumbruch verbessern
+\usepackage{graphicx}       % Grafiken
+\usepackage{csquotes}       % Zitate
+\usepackage[style=ieee]{biblatex} % Literaturverzeichnis
+\usepackage{fancyhdr}       % Kopf- und Fußzeilen
+\usepackage[T1]{fontenc}    % Schriftart
+\usepackage{uarial}         % Arial
+\usepackage{parskip}        % Abstand zwischen Absätzen
+\usepackage[nopostdot,nonumberlist,acronym,automake,toc,section]{glossaries} % Abkürzungsverzeichnis
+\usepackage{titlesec}       % Section- und Subsection-Überschriften
+\usepackage[colorlinks=false,pdfborder={0 0 0}]{hyperref} % Hyperlink für Inhaltsverzeichnis und Quellen
+\usepackage{nameref}
+\usepackage[nottoc,notbib,section]{tocbibind}
+\usepackage{url}            % bessere Darstellung von Links
+\usepackage{enumitem}       % Aufzählungen
+\usepackage{booktabs}       % Tabellen mit schöneren Linien
+\usepackage{multirow}       % Tabellen mit mehreren Zeilen
+\usepackage{longtable}      % Für mehrseitige Tabellen
+\usepackage{makecell}       % Für Zellen in Tabellen
+\usepackage{lipsum}         % Dummy Text
+\usepackage{xcolor}
+\usepackage{xparse}
+\usepackage{needspace}
+\usepackage{float}
+
+
+% Ränder einstellen
+\usepackage[
+    left=2.5cm, 
+    right=2.5cm, 
+    top=0cm, 
+    bottom=2.5cm,
+    nomarginpar,
+    includehead,
+    headheight=2.5cm,
+    headsep=1cm
+]{geometry}
+
+
+% Anpassung der Referenzformatierung
+\NewDocumentCommand{\fautoref}{m}{\textbf{\autoref{#1}}}
+\NewDocumentCommand{\fsecref}{m}{\textbf{\hyperref[#1]{\ref*{#1} \nameref*{#1}}}}
+\NewDocumentCommand{\shortsecref}{m}{\textbf{\hyperref[#1]{\nameref*{#1}}}}
+
+% Definiere Bibliografie-Treiber für @video
+\DeclareBibliographyAlias{video}{online}
+\DeclareBibliographyAlias{software}{online}
+
+% Schriftart ändern
+\renewcommand{\familydefault}{\sfdefault}
+\usepackage{setspace}
+
+% Setzt den Zeilenabstand
+\onehalfspacing
+
+% Setze den Abstand zwischen Absätzen
+\setlength{\parskip}{0.75cm}
+
+% Abstand vor und nach Section- und Subsection-Überschriften anpassen
+\titlespacing{\section}{0pt}{1.5cm}{0.75cm}
+\titlespacing{\subsection}{0pt}{1.25cm}{0.5cm}
+\titlespacing{\subsubsection}{0pt}{0.75cm}{0.25cm}
+
+

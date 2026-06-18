@@ -1,0 +1,21 @@
+\section{Konzeption der Modellarchitektur}
+
+\subsection{Auswahl und Begründung der Architektur}
+Dieses Kapitel stellt mögliche Netzwerkstrukturen fachlich gegenüber und begründet die finale Architekturwahl anhand der physikalischen Massenträgheit und der Sequenzlängen.
+
+\subsection{Definition von State Space und Action Space}
+
+\subsubsection{Strukturierung des State Vectors}
+Es erfolgt die mathematische Definition der formatierten Input-Features für jeden Zeitschritt.
+
+\subsubsection{Kontinuierlicher Action Space}
+Die Modellausgabe wird als kontinuierlicher Wert für den Leistungs- und Bremshebel spezifiziert.
+
+\subsection{Loss-Funktion und Optimizer}
+Dieser Abschnitt legt die mathematische Metrik zur Bewertung der Modellvorhersagen fest und begründet die Wahl robuster Regression-Losses (z.B. Huber Loss) gegenüber Ausreißern in Sensordaten.
+
+\subsection{Strategie zur netzinternen Regularisierung}
+Es werden die architektonischen Entscheidungen zur Overfitting-Prävention dokumentiert sowie die Platzierung und Konfiguration der gewählten Regularisierungs-Layer erklärt.
+
+\subsection{Schnittstelle für Reinforcement Learning (Warm-Start)}
+Dieses Kapitel beschreibt konzeptionell die Weiternutzung des trainierten Behavior-Cloning-Modells als Policy Initialization für einen späteren RL-Agenten.

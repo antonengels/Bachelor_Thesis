@@ -1,0 +1,36 @@
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.glg
+*.glo
+*.gls
+*.idx
+*.ilg
+*.ind
+*.lof
+*.log
+*.lot
+*.nav
+*.out
+*.run.xml
+*.snm
+*.synctex.gz
+*.toc
+*.xdv
+*.acn
+*.acr
+*.alg
+*.loa
+
+# Temporary / cache folders
+out/
+_minted*/
+
+# Editor and OS files
+.vscode/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,23 @@
+\section{Datenbasis und Preprocessing}
+
+\subsection{Datengrundlage und Explorative Datenanalyse}
+Dieses Kapitel beschreibt Herkunft und Struktur der realen Betriebsdaten, untersucht Verteilungen und identifiziert Sensorrauschen in den Messwerten.
+
+\subsection{Data Cleaning}
+Dieser Abschnitt dokumentiert Verfahren zur Behandlung fehlender Werte (Imputation) und Ausreißer sowie zur Synchronisation asynchroner Messreihen.
+
+\subsection{Feature Engineering}
+
+\subsubsection{Dynamische und infrastrukturelle Features}
+Es werden Streckengradienten, aktuelle Geschwindigkeiten und Signaldistanzen als Modell-Inputs eingebunden.
+
+\subsubsection{Statische Zugparameter}
+Dieser Abschnitt integriert physikalische Konstanten wie Zuggewicht und Zuglänge zur Abbildung der Massenträgheit.
+
+\subsection{Data Transformation und Splitting}
+
+\subsubsection{Feature Scaling}
+Die Input-Tensoren werden normalisiert und standardisiert, um die Gradienten während des Trainings zu stabilisieren.
+
+\subsubsection{Train-Validation-Test Split}
+Die Daten werden zeitlich korrekt getrennt, ohne Data Leakage oder zufälliges Mischen der Zeitreihen.
