@@ -7,8 +7,10 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 INPUT_DIR = BASE_DIR / 'input'
 OUTPUT_DIR = BASE_DIR / 'output'
 INPUT_PCAP = INPUT_DIR / '20260508_merged.pcapng'
+NID1_EXPORT = OUTPUT_DIR / 'NID_1.csv'
 NID6_EXPORT = OUTPUT_DIR / 'NID_6.csv'
 NID31_EXPORT = OUTPUT_DIR / 'NID_31.csv'
+NID32_EXPORT = OUTPUT_DIR / 'NID_32.csv'
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -201,6 +203,92 @@ def normalize_rtbrq(raw_value: float) -> float:
     return raw_value / 16384
 
 
+def build_nid1_export() -> pd.DataFrame:
+    print("Verarbeite NID_1 (Distanz bis Haltepunkt)...")
+    lines = run_tshark_export('aoecl.header.NID_PACKET == 1', 'aoecl.userdata.nid1.D_STPDISTANCE')
+
+    rows = []
+    for line in lines:
+        parts = line.split('\t', 1)
+        timestamp = parse_timestamp(parts[0])
+        if timestamp is None:
+            continue
+
+        value_str = parts[1].strip() if len(parts) == 2 else ''
+        try:
+            raw_value = float(value_str)
+            # Durch 100 teilen für Meter
+            normalized_value = raw_value / 100.0
+        except ValueError:
+            normalized_value = np.nan
+
+        rows.append({'timestamp': timestamp, 'D_STPDISTANCE': normalized_value})
+
+    nid1_df = pd.DataFrame(rows)
+    nid1_df.to_csv(NID1_EXPORT, index=False)
+    print(f"✓ NID_1 gespeichert: {NID1_EXPORT}")
+    print(f"  Zeilen verarbeitet: {len(nid1_df)}")
+    return nid1_df
+
+
+def build_nid32_export() -> pd.DataFrame:
+    print("Verarbeite NID_32 (Zugkraft-Feedback und Radschlupf)...")
+    
+    # tshark mit beiden Feldern aufrufen
+    tshark_cmd = [
+        'tshark',
+        '-r', str(INPUT_PCAP),
+        '-Y', 'aoecl.header.NID_PACKET == 32',
+        '-T', 'fields',
+        '-e', 'frame.time_epoch',
+        '-e', 'aoecl.userdata.nid32.M_RST_TBsetVal',
+        '-e', 'aoecl.userdata.nid32.M_RST_SlipSlide',
+    ]
+
+    result = subprocess.run(tshark_cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"tshark Fehler fuer NID_32: {result.stderr}")
+        raise SystemExit(1)
+
+    lines = [line for line in result.stdout.splitlines() if line.strip()]
+    
+    rows = []
+    for line in lines:
+        parts = line.split('\t')
+        
+        timestamp = parse_timestamp(parts[0]) if len(parts) > 0 else None
+        if timestamp is None:
+            continue
+        
+        # M_RST_TBsetVal: Durch 16384 teilen
+        tb_value_str = parts[1] if len(parts) > 1 else ''
+        try:
+            tb_raw = float(tb_value_str)
+            tb_normalized = tb_raw / 16384.0 if -16384 <= tb_raw <= 16384 else np.nan
+        except ValueError:
+            tb_normalized = np.nan
+        
+        # M_RST_SlipSlide: Boolean (0 oder 1), keine Skalierung
+        slip_str = parts[2] if len(parts) > 2 else ''
+        try:
+            slip_value = int(float(slip_str))
+            slip_normalized = slip_value if slip_value in [0, 1] else np.nan
+        except (ValueError, OverflowError):
+            slip_normalized = np.nan
+        
+        rows.append({
+            'timestamp': timestamp,
+            'M_RST_TBsetVal': tb_normalized,
+            'M_RST_SlipSlide': slip_normalized
+        })
+    
+    nid32_df = pd.DataFrame(rows)
+    nid32_df.to_csv(NID32_EXPORT, index=False)
+    print(f"✓ NID_32 gespeichert: {NID32_EXPORT}")
+    print(f"  Zeilen verarbeitet: {len(nid32_df)}")
+    return nid32_df
+
+
 def build_nid31_export() -> pd.DataFrame:
     print("Verarbeite NID_31...")
     lines = run_tshark_export('aoecl.header.NID_PACKET == 31', 'aoecl.userdata.nid31.M_ATO_RTBRq')
@@ -230,12 +318,16 @@ def build_nid31_export() -> pd.DataFrame:
 
 
 print("Starte tshark-Export...")
+nid1_df = build_nid1_export()
 nid6_df = build_nid6_export()
 nid31_df = build_nid31_export()
+nid32_df = build_nid32_export()
 
 print("\nErgebnisse:")
+print(f"  Output: {NID1_EXPORT}")
 print(f"  Output: {NID6_EXPORT}")
 print(f"  Output: {NID31_EXPORT}")
+print(f"  Output: {NID32_EXPORT}")
 print("\nErste 5 Zeilen NID_6:")
 print(nid6_df.head())
 print("\nErste 5 Zeilen NID_31:")
