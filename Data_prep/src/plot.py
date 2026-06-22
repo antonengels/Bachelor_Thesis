@@ -8,11 +8,13 @@ NID1_EXPORT = OUTPUT_DIR / 'NID_1.csv'
 NID6_EXPORT = OUTPUT_DIR / 'NID_6.csv'
 NID31_EXPORT = OUTPUT_DIR / 'NID_31.csv'
 NID32_EXPORT = OUTPUT_DIR / 'NID_32.csv'
+MERGED_EXPORT = OUTPUT_DIR / 'merged.csv'
 
 PLOT_NID1_PATH = OUTPUT_DIR / 'NID_1_interactive.html'
 PLOT_NID6_PATH = OUTPUT_DIR / 'NID_6_interactive.html'
 PLOT_NID31_PATH = OUTPUT_DIR / 'NID_31_interactive.html'
 PLOT_NID32_PATH = OUTPUT_DIR / 'NID_32_interactive.html'
+PLOT_MERGED_PATH = OUTPUT_DIR / 'merged_interactive.html'
 
 
 def prepare_time_column(df: pd.DataFrame) -> pd.DataFrame:
@@ -55,6 +57,39 @@ def load_nid32() -> pd.DataFrame:
 	if 'M_RST_SlipSlide' in df.columns:
 		df['M_RST_SlipSlide'] = pd.to_numeric(df['M_RST_SlipSlide'], errors='coerce')
 	return prepare_time_column(df)
+
+
+def load_merged() -> pd.DataFrame:
+	df = pd.read_csv(MERGED_EXPORT)
+
+	if 'datetime_utc' in df.columns:
+		df['datetime'] = pd.to_datetime(df['datetime_utc'], utc=True, errors='coerce')
+	elif 'timestamp' in df.columns:
+		df['timestamp'] = pd.to_numeric(df['timestamp'], errors='coerce')
+		df = df[df['timestamp'].notna()].copy()
+		timestamp_unit = 'us' if df['timestamp'].median() > 10**14 else 'ms'
+		df['datetime'] = pd.to_datetime(df['timestamp'], unit=timestamp_unit, utc=True, errors='coerce')
+	else:
+		df['datetime'] = pd.NaT
+
+	numeric_cols = [
+		'D_STPDISTANCE',
+		'v_est',
+		'a_est',
+		'v_mrsp',
+		'v_permitted',
+		'M_RST_TBsetVal',
+		'M_RST_SlipSlide',
+		'M_ATO_RTBRq_raw',
+		'M_ATO_RTBRq_deglitched',
+		'M_ATO_RTBRq_smooth',
+	] + [f'grad[{i}]' for i in range(10)]
+
+	for col in numeric_cols:
+		if col in df.columns:
+			df[col] = pd.to_numeric(df[col], errors='coerce')
+
+	return df[df['datetime'].notna()].copy()
 
 
 def build_nid6_figure(df: pd.DataFrame) -> go.Figure:
@@ -193,11 +228,76 @@ def build_nid32_figure(df: pd.DataFrame) -> go.Figure:
 	return fig
 
 
+def build_merged_figure(df: pd.DataFrame) -> go.Figure:
+	fig = go.Figure()
+
+	primary_cols = [
+		'D_STPDISTANCE',
+		'v_est',
+		'v_mrsp',
+		'v_permitted',
+		'a_est',
+		'M_RST_TBsetVal',
+		'M_RST_SlipSlide',
+		'M_ATO_RTBRq_raw',
+		'M_ATO_RTBRq_deglitched',
+		'M_ATO_RTBRq_smooth',
+	]
+
+	for col in primary_cols:
+		if col in df.columns:
+			fig.add_trace(
+				go.Scatter(
+					x=df['datetime'],
+					y=df[col],
+					mode='lines',
+					name=col,
+					visible=True if col in {'D_STPDISTANCE', 'v_est', 'M_ATO_RTBRq_smooth'} else 'legendonly',
+				)
+			)
+
+	for i in range(10):
+		col = f'grad[{i}]'
+		if col in df.columns:
+			fig.add_trace(
+				go.Scatter(
+					x=df['datetime'],
+					y=df[col],
+					mode='lines',
+					name=col,
+					visible='legendonly',
+				)
+			)
+
+	fig.update_layout(
+		title='Merged: Zeitreihen-Uebersicht (interaktiv)',
+		xaxis_title='Zeit (UTC)',
+		yaxis_title='Wert',
+		hovermode='x unified',
+		template='plotly_white',
+		legend={'orientation': 'h', 'yanchor': 'bottom', 'y': 1.02, 'xanchor': 'left', 'x': 0},
+	)
+
+	fig.update_xaxes(rangeslider_visible=True)
+	return fig
+
+
 def main() -> None:
 	nid1_df = load_nid1()
 	nid6_df = load_nid6()
 	nid31_df = load_nid31()
 	nid32_df = load_nid32()
+	merged_df = load_merged() if MERGED_EXPORT.exists() else pd.DataFrame()
+
+	if MERGED_EXPORT.exists() and not merged_df.empty:
+		merged_fig = build_merged_figure(merged_df)
+		merged_fig.write_html(PLOT_MERGED_PATH, include_plotlyjs='cdn')
+		print(f'✓ Interaktiver Plot gespeichert: {PLOT_MERGED_PATH}')
+		print(f'  merged Punkte: {len(merged_df)}')
+	elif MERGED_EXPORT.exists():
+		print('Keine Daten in merged.csv gefunden.')
+	else:
+		print('Datei merged.csv nicht gefunden, Merge-Plot wird uebersprungen.')
 
 	if nid1_df.empty:
 		print('Keine Daten in NID_1.csv gefunden.')
