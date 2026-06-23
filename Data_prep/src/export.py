@@ -1,24 +1,51 @@
-import pandas as pd
-import numpy as np
+import argparse
 import subprocess
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
+
 BASE_DIR = Path(__file__).resolve().parents[1]
-INPUT_DIR = BASE_DIR / 'input'
-OUTPUT_DIR = BASE_DIR / 'output'
-INPUT_PCAP = INPUT_DIR / '20260508_merged.pcapng'
-NID1_EXPORT = OUTPUT_DIR / 'NID_1.csv'
-NID6_EXPORT = OUTPUT_DIR / 'NID_6.csv'
-NID31_EXPORT = OUTPUT_DIR / 'NID_31.csv'
-NID32_EXPORT = OUTPUT_DIR / 'NID_32.csv'
-
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+DEFAULT_INPUT_DIR = BASE_DIR / 'input'
+DEFAULT_OUTPUT_DIR = BASE_DIR / 'output'
+DEFAULT_INPUT_PCAP = DEFAULT_INPUT_DIR / '20260508_merged.pcapng'
+EXPORT_CSV = True
+EXPORT_PARQUET = False
 
 
-def run_tshark_export(display_filter: str, field_name: str) -> list[str]:
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Exportiert NID-Daten als CSV und optional Parquet.")
+    parser.add_argument(
+        "--input-pcapng",
+        type=Path,
+        default=DEFAULT_INPUT_PCAP,
+        help=f"Pfad zur PCAPNG-Datei (Default: {DEFAULT_INPUT_PCAP})."
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=DEFAULT_OUTPUT_DIR,
+        help=f"Ausgabeverzeichnis fuer Exports (Default: {DEFAULT_OUTPUT_DIR})."
+    )
+    parser.add_argument("--csv", action="store_true", default=None, help="CSV-Export aktivieren.")
+    parser.add_argument("--parquet", action="store_true", default=None, help="Parquet-Export aktivieren.")
+    return parser.parse_args()
+
+
+def write_outputs(df: pd.DataFrame, csv_path: Path, parquet_path: Path, label: str) -> None:
+    if EXPORT_CSV:
+        df.to_csv(csv_path, index=False)
+        print(f"✓ {label} CSV gespeichert: {csv_path}")
+
+    if EXPORT_PARQUET:
+        df.to_parquet(parquet_path, index=False)
+        print(f"✓ {label} Parquet gespeichert: {parquet_path}")
+
+
+def run_tshark_export(input_pcap: Path, display_filter: str, field_name: str) -> list[str]:
     tshark_cmd = [
         'tshark',
-        '-r', str(INPUT_PCAP),
+        '-r', str(input_pcap),
         '-Y', display_filter,
         '-T', 'fields',
         '-e', 'frame.time_epoch',
@@ -132,13 +159,16 @@ def parse_packet_6(raw_values: dict) -> dict:
     return result
 
 
-def build_nid6_export() -> pd.DataFrame:
+def build_nid6_export(input_pcap: Path, output_dir: Path) -> pd.DataFrame:
     print("Verarbeite NID_6 (Fahrzeugdynamik)...")
+    
+    nid6_export = output_dir / 'NID_6.csv'
+    nid6_parquet = output_dir / "NID_6.parquet"
     
     # tshark mit allen benötigten Feldern aufrufen
     tshark_cmd = [
         'tshark',
-        '-r', str(INPUT_PCAP),
+        '-r', str(input_pcap),
         '-Y', 'aoecl.header.NID_PACKET == 6',
         '-T', 'fields',
         '-e', 'frame.time_epoch',
@@ -189,9 +219,8 @@ def build_nid6_export() -> pd.DataFrame:
     # Spalten-Reihenfolge: timestamp, dann Velocities, dann A_EST, dann Gradienten
     col_order = ['timestamp', 'v_est', 'a_est', 'v_mrsp', 'v_permitted'] + [f'grad[{i}]' for i in range(10)]
     nid6_df = nid6_df[col_order]
-    
-    nid6_df.to_csv(NID6_EXPORT, index=False)
-    print(f"✓ NID_6 gespeichert: {NID6_EXPORT}")
+
+    write_outputs(nid6_df, nid6_export, nid6_parquet, "NID_6")
     print(f"  Zeilen verarbeitet: {len(nid6_df)}")
     
     return nid6_df
@@ -203,9 +232,11 @@ def normalize_rtbrq(raw_value: float) -> float:
     return raw_value / 16384
 
 
-def build_nid1_export() -> pd.DataFrame:
+def build_nid1_export(input_pcap: Path, output_dir: Path) -> pd.DataFrame:
     print("Verarbeite NID_1 (Distanz bis Haltepunkt)...")
-    lines = run_tshark_export('aoecl.header.NID_PACKET == 1', 'aoecl.userdata.nid1.D_STPDISTANCE')
+    nid1_export = output_dir / 'NID_1.csv'
+    nid1_parquet = output_dir / "NID_1.parquet"
+    lines = run_tshark_export(input_pcap, 'aoecl.header.NID_PACKET == 1', 'aoecl.userdata.nid1.D_STPDISTANCE')
 
     rows = []
     for line in lines:
@@ -225,19 +256,22 @@ def build_nid1_export() -> pd.DataFrame:
         rows.append({'timestamp': timestamp, 'D_STPDISTANCE': normalized_value})
 
     nid1_df = pd.DataFrame(rows)
-    nid1_df.to_csv(NID1_EXPORT, index=False)
-    print(f"✓ NID_1 gespeichert: {NID1_EXPORT}")
+
+    write_outputs(nid1_df, nid1_export, nid1_parquet, "NID_1")
     print(f"  Zeilen verarbeitet: {len(nid1_df)}")
     return nid1_df
 
 
-def build_nid32_export() -> pd.DataFrame:
+def build_nid32_export(input_pcap: Path, output_dir: Path) -> pd.DataFrame:
     print("Verarbeite NID_32 (Zugkraft-Feedback und Radschlupf)...")
+    
+    nid32_export = output_dir / 'NID_32.csv'
+    nid32_parquet = output_dir / "NID_32.parquet"
     
     # tshark mit beiden Feldern aufrufen
     tshark_cmd = [
         'tshark',
-        '-r', str(INPUT_PCAP),
+        '-r', str(input_pcap),
         '-Y', 'aoecl.header.NID_PACKET == 32',
         '-T', 'fields',
         '-e', 'frame.time_epoch',
@@ -283,15 +317,17 @@ def build_nid32_export() -> pd.DataFrame:
         })
     
     nid32_df = pd.DataFrame(rows)
-    nid32_df.to_csv(NID32_EXPORT, index=False)
-    print(f"✓ NID_32 gespeichert: {NID32_EXPORT}")
+
+    write_outputs(nid32_df, nid32_export, nid32_parquet, "NID_32")
     print(f"  Zeilen verarbeitet: {len(nid32_df)}")
     return nid32_df
 
 
-def build_nid31_export() -> pd.DataFrame:
+def build_nid31_export(input_pcap: Path, output_dir: Path) -> pd.DataFrame:
     print("Verarbeite NID_31...")
-    lines = run_tshark_export('aoecl.header.NID_PACKET == 31', 'aoecl.userdata.nid31.M_ATO_RTBRq')
+    nid31_export = output_dir / 'NID_31.csv'
+    nid31_parquet = output_dir / "NID_31.parquet"
+    lines = run_tshark_export(input_pcap, 'aoecl.header.NID_PACKET == 31', 'aoecl.userdata.nid31.M_ATO_RTBRq')
 
     rows = []
     for line in lines:
@@ -311,24 +347,42 @@ def build_nid31_export() -> pd.DataFrame:
         rows.append({'timestamp': timestamp, 'value': normalized_value})
 
     nid31_df = pd.DataFrame(rows)
-    nid31_df.to_csv(NID31_EXPORT, index=False)
-    print(f"✓ NID_31 gespeichert: {NID31_EXPORT}")
+
+    write_outputs(nid31_df, nid31_export, nid31_parquet, "NID_31")
     print(f"  Zeilen verarbeitet: {len(nid31_df)}")
     return nid31_df
 
 
-print("Starte tshark-Export...")
-nid1_df = build_nid1_export()
-nid6_df = build_nid6_export()
-nid31_df = build_nid31_export()
-nid32_df = build_nid32_export()
+def main() -> None:
+    global EXPORT_CSV, EXPORT_PARQUET
 
-print("\nErgebnisse:")
-print(f"  Output: {NID1_EXPORT}")
-print(f"  Output: {NID6_EXPORT}")
-print(f"  Output: {NID31_EXPORT}")
-print(f"  Output: {NID32_EXPORT}")
-print("\nErste 5 Zeilen NID_6:")
-print(nid6_df.head())
-print("\nErste 5 Zeilen NID_31:")
-print(nid31_df.head())
+    args = parse_args()
+    if args.csv is None and args.parquet is None:
+        EXPORT_CSV = True
+        EXPORT_PARQUET = False
+    else:
+        EXPORT_CSV = bool(args.csv)
+        EXPORT_PARQUET = bool(args.parquet)
+
+    if not EXPORT_CSV and not EXPORT_PARQUET:
+        raise SystemExit("Bitte mindestens --csv oder --parquet aktivieren.")
+
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+
+    print("Starte tshark-Export...")
+    nid1_df = build_nid1_export(args.input_pcapng, args.output_dir)
+    nid6_df = build_nid6_export(args.input_pcapng, args.output_dir)
+    nid31_df = build_nid31_export(args.input_pcapng, args.output_dir)
+    nid32_df = build_nid32_export(args.input_pcapng, args.output_dir)
+
+    print("\nErgebnisse:")
+    print(f"  Ausgabeverzeichnis: {args.output_dir}")
+
+    print("\nErste 5 Zeilen NID_6:")
+    print(nid6_df.head())
+    print("\nErste 5 Zeilen NID_31:")
+    print(nid31_df.head())
+
+
+if __name__ == "__main__":
+    main()

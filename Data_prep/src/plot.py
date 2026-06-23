@@ -1,3 +1,5 @@
+import argparse
+
 import pandas as pd
 from pathlib import Path
 import plotly.graph_objects as go
@@ -15,6 +17,16 @@ PLOT_NID6_PATH = OUTPUT_DIR / 'NID_6_interactive.html'
 PLOT_NID31_PATH = OUTPUT_DIR / 'NID_31_interactive.html'
 PLOT_NID32_PATH = OUTPUT_DIR / 'NID_32_interactive.html'
 PLOT_MERGED_PATH = OUTPUT_DIR / 'merged_interactive.html'
+
+
+def parse_args() -> argparse.Namespace:
+	parser = argparse.ArgumentParser(description='Erzeugt interaktive Plots aus den Exportdateien.')
+	parser.add_argument(
+		'--merged-only',
+		action='store_true',
+		help='Nur den Plot fuer merged.csv erzeugen.',
+	)
+	return parser.parse_args()
 
 
 def prepare_time_column(df: pd.DataFrame) -> pd.DataFrame:
@@ -283,6 +295,21 @@ def build_merged_figure(df: pd.DataFrame) -> go.Figure:
 
 
 def main() -> None:
+	args = parse_args()
+
+	if args.merged_only:
+		merged_df = load_merged() if MERGED_EXPORT.exists() else pd.DataFrame()
+		if MERGED_EXPORT.exists() and not merged_df.empty:
+			merged_fig = build_merged_figure(merged_df)
+			merged_fig.write_html(PLOT_MERGED_PATH, include_plotlyjs='cdn')
+			print(f'✓ Interaktiver Plot gespeichert: {PLOT_MERGED_PATH}')
+			print(f'  merged Punkte: {len(merged_df)}')
+		elif MERGED_EXPORT.exists():
+			print('Keine Daten in merged.csv gefunden.')
+		else:
+			print('Datei merged.csv nicht gefunden, Merge-Plot wird uebersprungen.')
+		return
+
 	nid1_df = load_nid1()
 	nid6_df = load_nid6()
 	nid31_df = load_nid31()

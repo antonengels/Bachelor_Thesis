@@ -8,12 +8,21 @@ import pandas as pd
 BASE_DIR = Path(__file__).resolve().parents[1]
 OUTPUT_DIR = BASE_DIR / "output"
 
-NID1_EXPORT = OUTPUT_DIR / "NID_1.csv"
-NID6_EXPORT = OUTPUT_DIR / "NID_6.csv"
-NID31_EXPORT = OUTPUT_DIR / "NID_31.csv"
-NID32_EXPORT = OUTPUT_DIR / "NID_32.csv"
+CSV_INPUTS = {
+    "nid1": OUTPUT_DIR / "NID_1.csv",
+    "nid6": OUTPUT_DIR / "NID_6.csv",
+    "nid31": OUTPUT_DIR / "NID_31.csv",
+    "nid32": OUTPUT_DIR / "NID_32.csv",
+}
+PARQUET_INPUTS = {
+    "nid1": OUTPUT_DIR / "NID_1.parquet",
+    "nid6": OUTPUT_DIR / "NID_6.parquet",
+    "nid31": OUTPUT_DIR / "NID_31.parquet",
+    "nid32": OUTPUT_DIR / "NID_32.parquet",
+}
 
-DEFAULT_OUTPUT = OUTPUT_DIR / "merged.csv"
+DEFAULT_CSV_OUTPUT = OUTPUT_DIR / "merged.csv"
+DEFAULT_PARQUET_OUTPUT = OUTPUT_DIR / "merged.parquet"
 
 NID6_COLUMNS = ["v_est", "a_est", "v_mrsp", "v_permitted"] + [f"grad[{i}]" for i in range(10)]
 CONTINUOUS_FEATURE_COLUMNS = ["D_STPDISTANCE"] + NID6_COLUMNS + ["M_RST_TBsetVal"]
@@ -24,7 +33,11 @@ def load_packet_frame(path: Path, expected_columns: list[str]) -> pd.DataFrame:
     if not path.exists():
         raise FileNotFoundError(f"Datei nicht gefunden: {path}")
 
-    df = pd.read_csv(path)
+    if path.suffix.lower() == ".parquet":
+        df = pd.read_parquet(path)
+    else:
+        df = pd.read_csv(path)
+
     if "timestamp" not in df.columns:
         raise ValueError(f"Spalte 'timestamp' fehlt in: {path}")
 
@@ -149,15 +162,16 @@ def remove_short_zero_dropouts(series: pd.Series, max_zero_run: int, zero_eps: f
 
 
 def create_merged_dataset(
+    input_paths: dict[str, Path],
     freq: str,
     moving_average_window: int,
     max_zero_run: int,
     max_age_ms: int,
 ) -> pd.DataFrame:
-    nid1 = load_packet_frame(NID1_EXPORT, ["D_STPDISTANCE"])
-    nid6 = load_packet_frame(NID6_EXPORT, NID6_COLUMNS)
-    nid31 = load_packet_frame(NID31_EXPORT, ["value"]).rename(columns={"value": "M_ATO_RTBRq_raw"})
-    nid32 = load_packet_frame(NID32_EXPORT, ["M_RST_TBsetVal", "M_RST_SlipSlide"])
+    nid1 = load_packet_frame(input_paths["nid1"], ["D_STPDISTANCE"])
+    nid6 = load_packet_frame(input_paths["nid6"], NID6_COLUMNS)
+    nid31 = load_packet_frame(input_paths["nid31"], ["value"]).rename(columns={"value": "M_ATO_RTBRq_raw"})
+    nid32 = load_packet_frame(input_paths["nid32"], ["M_RST_TBsetVal", "M_RST_SlipSlide"])
 
     grid = build_common_grid([nid1, nid6, nid31, nid32], freq=freq)
     tolerance = pd.Timedelta(milliseconds=max_age_ms)
@@ -226,12 +240,22 @@ def parse_args() -> argparse.Namespace:
         help="Maximales Alter beim asof-Merge (stale sample cutoff).",
     )
     parser.add_argument(
-        "--output",
+        "--csv-output",
         type=Path,
-        default=DEFAULT_OUTPUT,
-        help=f"Ausgabedatei (Default: {DEFAULT_OUTPUT}).",
+        default=DEFAULT_CSV_OUTPUT,
+        help=f"CSV-Ausgabedatei (Default: {DEFAULT_CSV_OUTPUT}).",
+    )
+    parser.add_argument(
+        "--parquet-output",
+        type=Path,
+        default=DEFAULT_PARQUET_OUTPUT,
+        help=f"Parquet-Ausgabedatei (Default: {DEFAULT_PARQUET_OUTPUT}).",
     )
     return parser.parse_args()
+
+
+def missing_inputs(input_paths: dict[str, Path]) -> list[Path]:
+    return [path for path in input_paths.values() if not path.exists()]
 
 
 def main() -> None:
@@ -244,19 +268,53 @@ def main() -> None:
     if args.max_age_ms < 1:
         raise ValueError("--max-age-ms muss >= 1 sein.")
 
-    merged_df = create_merged_dataset(
-        freq=args.freq,
-        moving_average_window=args.moving_average_window,
-        max_zero_run=args.max_zero_run,
-        max_age_ms=args.max_age_ms,
-    )
+    wrote_any_output = False
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    merged_df.to_csv(args.output, index=False)
+    csv_missing = missing_inputs(CSV_INPUTS)
+    if not csv_missing:
+        merged_csv = create_merged_dataset(
+            input_paths=CSV_INPUTS,
+            freq=args.freq,
+            moving_average_window=args.moving_average_window,
+            max_zero_run=args.max_zero_run,
+            max_age_ms=args.max_age_ms,
+        )
+        args.csv_output.parent.mkdir(parents=True, exist_ok=True)
+        merged_csv.to_csv(args.csv_output, index=False)
+        wrote_any_output = True
+        print(f"OK: Merged CSV gespeichert: {args.csv_output}")
+        print(f"  Zeilen: {len(merged_csv)}")
+        print(f"  Spalten: {len(merged_csv.columns)}")
+    else:
+        print("Info: CSV-Merge uebersprungen (fehlende Eingaben).")
+        for path in csv_missing:
+            print(f"  - fehlt: {path}")
 
-    print(f"OK: Merged CSV gespeichert: {args.output}")
-    print(f"  Zeilen: {len(merged_df)}")
-    print(f"  Spalten: {len(merged_df.columns)}")
+    parquet_missing = missing_inputs(PARQUET_INPUTS)
+    if not parquet_missing:
+        merged_parquet = create_merged_dataset(
+            input_paths=PARQUET_INPUTS,
+            freq=args.freq,
+            moving_average_window=args.moving_average_window,
+            max_zero_run=args.max_zero_run,
+            max_age_ms=args.max_age_ms,
+        )
+        args.parquet_output.parent.mkdir(parents=True, exist_ok=True)
+        merged_parquet.to_parquet(args.parquet_output, index=False)
+        wrote_any_output = True
+        print(f"OK: Merged Parquet gespeichert: {args.parquet_output}")
+        print(f"  Zeilen: {len(merged_parquet)}")
+        print(f"  Spalten: {len(merged_parquet.columns)}")
+    else:
+        print("Info: Parquet-Merge uebersprungen (fehlende Eingaben).")
+        for path in parquet_missing:
+            print(f"  - fehlt: {path}")
+
+    if not wrote_any_output:
+        raise FileNotFoundError(
+            "Kein Merge erzeugt, weil weder ein vollstaendiger CSV- noch Parquet-Eingabesatz vorhanden ist."
+        )
+
     print("  Label-Spalten: M_ATO_RTBRq_raw, M_ATO_RTBRq_deglitched, M_ATO_RTBRq_smooth")
 
 
