@@ -44,6 +44,12 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_OUTPUT_DIR,
         help=f"Ausgabeverzeichnis (Default: {DEFAULT_OUTPUT_DIR})."
     )
+    parser.add_argument(
+        "--output-prefix",
+        type=str,
+        default="",
+        help="Präfix für die Ausgabedateien (z.B. '20251015' für '20251015_NID_1.parquet')."
+    )
     parser.add_argument("--skip-export", action="store_true", help="Export-Schritt ueberspringen.")
     parser.add_argument("--skip-merge", action="store_true", help="Merge-Schritt ueberspringen.")
     parser.add_argument("--skip-plot", action="store_true", help="Plot-Schritt ueberspringen.")
@@ -101,6 +107,8 @@ def main() -> None:
             str(args.input_pcapng),
             "--output-dir",
             str(args.output_dir),
+            "--output-prefix",
+            args.output_prefix,
         ]
         if CSV_EXPORT:
             export_cmd.append("--csv")
@@ -115,14 +123,19 @@ def main() -> None:
             print("Uebersprungen (keine Export-Flags aktiv).")
 
     if not args.skip_merge:
-        merge_csv_output = args.merge_csv_output if args.merge_csv_output is not None else args.output_dir / "merged.csv"
-        merge_parquet_output = args.merge_parquet_output if args.merge_parquet_output is not None else args.output_dir / "merged.parquet"
+        prefix_str = f"{args.output_prefix}_" if args.output_prefix else ""
+        merge_csv_output = args.merge_csv_output if args.merge_csv_output is not None else args.output_dir / f"{prefix_str}merged.csv"
+        merge_parquet_output = args.merge_parquet_output if args.merge_parquet_output is not None else args.output_dir / f"{prefix_str}merged.parquet"
         
         merge_cmd = [
             python_exec,
             str(SRC_DIR / "merge.py"),
             "--freq",
             args.freq,
+            "--input-dir",
+            str(args.output_dir),
+            "--input-prefix",
+            args.output_prefix,
             "--moving-average-window",
             str(args.moving_average_window),
             "--max-zero-run",

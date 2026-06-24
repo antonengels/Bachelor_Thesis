@@ -27,6 +27,12 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_OUTPUT_DIR,
         help=f"Ausgabeverzeichnis fuer Exports (Default: {DEFAULT_OUTPUT_DIR})."
     )
+    parser.add_argument(
+        "--output-prefix",
+        type=str,
+        default="",
+        help="Präfix für die Ausgabedateien (z.B. '20251015' für '20251015_NID_1.parquet')."
+    )
     parser.add_argument("--csv", action="store_true", default=None, help="CSV-Export aktivieren.")
     parser.add_argument("--parquet", action="store_true", default=None, help="Parquet-Export aktivieren.")
     return parser.parse_args()
@@ -35,11 +41,11 @@ def parse_args() -> argparse.Namespace:
 def write_outputs(df: pd.DataFrame, csv_path: Path, parquet_path: Path, label: str) -> None:
     if EXPORT_CSV:
         df.to_csv(csv_path, index=False)
-        print(f"✓ {label} CSV gespeichert: {csv_path}")
+        print(f"[OK] {label} CSV gespeichert: {csv_path}")
 
     if EXPORT_PARQUET:
         df.to_parquet(parquet_path, index=False)
-        print(f"✓ {label} Parquet gespeichert: {parquet_path}")
+        print(f"[OK] {label} Parquet gespeichert: {parquet_path}")
 
 
 def run_tshark_export(input_pcap: Path, display_filter: str, field_name: str) -> list[str]:
@@ -159,11 +165,12 @@ def parse_packet_6(raw_values: dict) -> dict:
     return result
 
 
-def build_nid6_export(input_pcap: Path, output_dir: Path) -> pd.DataFrame:
+def build_nid6_export(input_pcap: Path, output_dir: Path, output_prefix: str = "") -> pd.DataFrame:
     print("Verarbeite NID_6 (Fahrzeugdynamik)...")
     
-    nid6_export = output_dir / 'NID_6.csv'
-    nid6_parquet = output_dir / "NID_6.parquet"
+    prefix_str = f"{output_prefix}_" if output_prefix else ""
+    nid6_export = output_dir / f'{prefix_str}NID_6.csv'
+    nid6_parquet = output_dir / f"{prefix_str}NID_6.parquet"
     
     # tshark mit allen benötigten Feldern aufrufen
     tshark_cmd = [
@@ -211,7 +218,7 @@ def build_nid6_export(input_pcap: Path, output_dir: Path) -> pd.DataFrame:
     
     # DataFrame aus allen Zeilen erstellen
     if not rows:
-        print("⚠ Keine NID_6-Pakete gefunden!")
+        print("[WARN] Keine NID_6-Pakete gefunden!")
         return pd.DataFrame()
     
     nid6_df = pd.DataFrame(rows)
@@ -232,10 +239,11 @@ def normalize_rtbrq(raw_value: float) -> float:
     return raw_value / 16384
 
 
-def build_nid1_export(input_pcap: Path, output_dir: Path) -> pd.DataFrame:
+def build_nid1_export(input_pcap: Path, output_dir: Path, output_prefix: str = "") -> pd.DataFrame:
     print("Verarbeite NID_1 (Distanz bis Haltepunkt)...")
-    nid1_export = output_dir / 'NID_1.csv'
-    nid1_parquet = output_dir / "NID_1.parquet"
+    prefix_str = f"{output_prefix}_" if output_prefix else ""
+    nid1_export = output_dir / f'{prefix_str}NID_1.csv'
+    nid1_parquet = output_dir / f"{prefix_str}NID_1.parquet"
     lines = run_tshark_export(input_pcap, 'aoecl.header.NID_PACKET == 1', 'aoecl.userdata.nid1.D_STPDISTANCE')
 
     rows = []
@@ -262,11 +270,12 @@ def build_nid1_export(input_pcap: Path, output_dir: Path) -> pd.DataFrame:
     return nid1_df
 
 
-def build_nid32_export(input_pcap: Path, output_dir: Path) -> pd.DataFrame:
+def build_nid32_export(input_pcap: Path, output_dir: Path, output_prefix: str = "") -> pd.DataFrame:
     print("Verarbeite NID_32 (Zugkraft-Feedback und Radschlupf)...")
     
-    nid32_export = output_dir / 'NID_32.csv'
-    nid32_parquet = output_dir / "NID_32.parquet"
+    prefix_str = f"{output_prefix}_" if output_prefix else ""
+    nid32_export = output_dir / f'{prefix_str}NID_32.csv'
+    nid32_parquet = output_dir / f"{prefix_str}NID_32.parquet"
     
     # tshark mit beiden Feldern aufrufen
     tshark_cmd = [
@@ -323,10 +332,11 @@ def build_nid32_export(input_pcap: Path, output_dir: Path) -> pd.DataFrame:
     return nid32_df
 
 
-def build_nid31_export(input_pcap: Path, output_dir: Path) -> pd.DataFrame:
+def build_nid31_export(input_pcap: Path, output_dir: Path, output_prefix: str = "") -> pd.DataFrame:
     print("Verarbeite NID_31...")
-    nid31_export = output_dir / 'NID_31.csv'
-    nid31_parquet = output_dir / "NID_31.parquet"
+    prefix_str = f"{output_prefix}_" if output_prefix else ""
+    nid31_export = output_dir / f'{prefix_str}NID_31.csv'
+    nid31_parquet = output_dir / f"{prefix_str}NID_31.parquet"
     lines = run_tshark_export(input_pcap, 'aoecl.header.NID_PACKET == 31', 'aoecl.userdata.nid31.M_ATO_RTBRq')
 
     rows = []
@@ -370,10 +380,10 @@ def main() -> None:
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     print("Starte tshark-Export...")
-    nid1_df = build_nid1_export(args.input_pcapng, args.output_dir)
-    nid6_df = build_nid6_export(args.input_pcapng, args.output_dir)
-    nid31_df = build_nid31_export(args.input_pcapng, args.output_dir)
-    nid32_df = build_nid32_export(args.input_pcapng, args.output_dir)
+    nid1_df = build_nid1_export(args.input_pcapng, args.output_dir, args.output_prefix)
+    nid6_df = build_nid6_export(args.input_pcapng, args.output_dir, args.output_prefix)
+    nid31_df = build_nid31_export(args.input_pcapng, args.output_dir, args.output_prefix)
+    nid32_df = build_nid32_export(args.input_pcapng, args.output_dir, args.output_prefix)
 
     print("\nErgebnisse:")
     print(f"  Ausgabeverzeichnis: {args.output_dir}")

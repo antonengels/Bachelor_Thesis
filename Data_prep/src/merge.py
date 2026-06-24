@@ -7,19 +7,7 @@ import pandas as pd
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 OUTPUT_DIR = BASE_DIR / "output"
-
-CSV_INPUTS = {
-    "nid1": OUTPUT_DIR / "NID_1.csv",
-    "nid6": OUTPUT_DIR / "NID_6.csv",
-    "nid31": OUTPUT_DIR / "NID_31.csv",
-    "nid32": OUTPUT_DIR / "NID_32.csv",
-}
-PARQUET_INPUTS = {
-    "nid1": OUTPUT_DIR / "NID_1.parquet",
-    "nid6": OUTPUT_DIR / "NID_6.parquet",
-    "nid31": OUTPUT_DIR / "NID_31.parquet",
-    "nid32": OUTPUT_DIR / "NID_32.parquet",
-}
+DEFAULT_INPUT_DIR = OUTPUT_DIR
 
 DEFAULT_CSV_OUTPUT = OUTPUT_DIR / "merged.csv"
 DEFAULT_PARQUET_OUTPUT = OUTPUT_DIR / "merged.parquet"
@@ -27,6 +15,16 @@ DEFAULT_PARQUET_OUTPUT = OUTPUT_DIR / "merged.parquet"
 NID6_COLUMNS = ["v_est", "a_est", "v_mrsp", "v_permitted"] + [f"grad[{i}]" for i in range(10)]
 CONTINUOUS_FEATURE_COLUMNS = ["D_STPDISTANCE"] + NID6_COLUMNS + ["M_RST_TBsetVal"]
 DISCRETE_FEATURE_COLUMNS = ["M_RST_SlipSlide"]
+
+
+def build_input_paths(input_dir: Path, input_prefix: str, suffix: str) -> dict[str, Path]:
+    prefix_str = f"{input_prefix}_" if input_prefix else ""
+    return {
+        "nid1": input_dir / f"{prefix_str}NID_1{suffix}",
+        "nid6": input_dir / f"{prefix_str}NID_6{suffix}",
+        "nid31": input_dir / f"{prefix_str}NID_31{suffix}",
+        "nid32": input_dir / f"{prefix_str}NID_32{suffix}",
+    }
 
 
 def load_packet_frame(path: Path, expected_columns: list[str]) -> pd.DataFrame:
@@ -222,6 +220,18 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--freq", default="100ms", help="Ziel-Raster, z.B. 100ms oder 50ms.")
     parser.add_argument(
+        "--input-dir",
+        type=Path,
+        default=DEFAULT_INPUT_DIR,
+        help=f"Eingabeverzeichnis fuer NID-Dateien (Default: {DEFAULT_INPUT_DIR}).",
+    )
+    parser.add_argument(
+        "--input-prefix",
+        type=str,
+        default="",
+        help="Praefix fuer Eingabedateien (z.B. '20251015' fuer '20251015_NID_1.parquet').",
+    )
+    parser.add_argument(
         "--moving-average-window",
         type=int,
         default=5,
@@ -268,12 +278,15 @@ def main() -> None:
     if args.max_age_ms < 1:
         raise ValueError("--max-age-ms muss >= 1 sein.")
 
+    csv_inputs = build_input_paths(args.input_dir, args.input_prefix, ".csv")
+    parquet_inputs = build_input_paths(args.input_dir, args.input_prefix, ".parquet")
+
     wrote_any_output = False
 
-    csv_missing = missing_inputs(CSV_INPUTS)
+    csv_missing = missing_inputs(csv_inputs)
     if not csv_missing:
         merged_csv = create_merged_dataset(
-            input_paths=CSV_INPUTS,
+            input_paths=csv_inputs,
             freq=args.freq,
             moving_average_window=args.moving_average_window,
             max_zero_run=args.max_zero_run,
@@ -290,10 +303,10 @@ def main() -> None:
         for path in csv_missing:
             print(f"  - fehlt: {path}")
 
-    parquet_missing = missing_inputs(PARQUET_INPUTS)
+    parquet_missing = missing_inputs(parquet_inputs)
     if not parquet_missing:
         merged_parquet = create_merged_dataset(
-            input_paths=PARQUET_INPUTS,
+            input_paths=parquet_inputs,
             freq=args.freq,
             moving_average_window=args.moving_average_window,
             max_zero_run=args.max_zero_run,
