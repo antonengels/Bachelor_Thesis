@@ -30,6 +30,17 @@ def parse_args() -> argparse.Namespace:
 		default="",
 		help="Praefix fuer Eingabe- und Plot-Dateien (z.B. '20251015').",
 	)
+	parser.add_argument(
+		"--trip-subdir-prefix",
+		type=str,
+		default="trip",
+		help="Praefix fuer Trip-Unterordner (Default: trip -> trip1, trip2, ...).",
+	)
+	parser.add_argument(
+		"--skip-merged-plot",
+		action="store_true",
+		help="Merged-Plot nicht erzeugen.",
+	)
 	return parser.parse_args()
 
 
@@ -329,9 +340,33 @@ def write_plot(fig: go.Figure, output_path: Path, label: str, count: int) -> Non
 	print(f"  {label} Punkte: {count}")
 
 
+def resolve_trip_input_path(trip_dir: Path, file_prefix: str) -> Path | None:
+	trip_tag = trip_dir.name
+	prefix_str = f"{file_prefix}_" if file_prefix else ""
+	base_name = f"{prefix_str}{trip_tag}"
+
+	parquet_path = trip_dir / f"{base_name}.parquet"
+	csv_path = trip_dir / f"{base_name}.csv"
+
+	if parquet_path.exists():
+		return parquet_path
+	if csv_path.exists():
+		return csv_path
+
+	any_parquet = sorted(trip_dir.glob("*.parquet"))
+	if any_parquet:
+		return any_parquet[0]
+	any_csv = sorted(trip_dir.glob("*.csv"))
+	if any_csv:
+		return any_csv[0]
+	return None
+
+
 def main() -> None:
 	args = parse_args()
 	args.output_dir.mkdir(parents=True, exist_ok=True)
+	nid_plot_dir = args.output_dir / "nidplot"
+	nid_plot_dir.mkdir(parents=True, exist_ok=True)
 
 	input_paths = {
 		"nid1": resolve_input_path(args.input_dir, args.file_prefix, "NID_1"),
@@ -343,10 +378,10 @@ def main() -> None:
 
 	prefix = args.file_prefix
 	plot_paths = {
-		"nid1": args.output_dir / prefixed_name(prefix, "NID_1_interactive", ".html"),
-		"nid6": args.output_dir / prefixed_name(prefix, "NID_6_interactive", ".html"),
-		"nid31": args.output_dir / prefixed_name(prefix, "NID_31_interactive", ".html"),
-		"nid32": args.output_dir / prefixed_name(prefix, "NID_32_interactive", ".html"),
+		"nid1": nid_plot_dir / prefixed_name(prefix, "NID_1_interactive", ".html"),
+		"nid6": nid_plot_dir / prefixed_name(prefix, "NID_6_interactive", ".html"),
+		"nid31": nid_plot_dir / prefixed_name(prefix, "NID_31_interactive", ".html"),
+		"nid32": nid_plot_dir / prefixed_name(prefix, "NID_32_interactive", ".html"),
 		"merged": args.output_dir / prefixed_name(prefix, "merged_interactive", ".html"),
 	}
 
@@ -364,15 +399,16 @@ def main() -> None:
 		write_plot(build_merged_figure(merged_df), plot_paths["merged"], "merged", len(merged_df))
 		return
 
-	merged_input = input_paths["merged"]
-	if merged_input is None:
-		print("Datei merged.csv bzw. merged.parquet nicht gefunden, Merge-Plot wird uebersprungen.")
-	else:
-		merged_df = load_merged(merged_input)
-		if merged_df.empty:
-			print(f"Keine Daten in {merged_input.name} gefunden.")
+	if not args.skip_merged_plot:
+		merged_input = input_paths["merged"]
+		if merged_input is None:
+			print("Datei merged.csv bzw. merged.parquet nicht gefunden, Merge-Plot wird uebersprungen.")
 		else:
-			write_plot(build_merged_figure(merged_df), plot_paths["merged"], "merged", len(merged_df))
+			merged_df = load_merged(merged_input)
+			if merged_df.empty:
+				print(f"Keine Daten in {merged_input.name} gefunden.")
+			else:
+				write_plot(build_merged_figure(merged_df), plot_paths["merged"], "merged", len(merged_df))
 
 	nid1_input = input_paths["nid1"]
 	if nid1_input is None:
@@ -413,6 +449,24 @@ def main() -> None:
 			print(f"Keine Daten in {nid32_input.name} gefunden.")
 		else:
 			write_plot(build_nid32_figure(nid32_df), plot_paths["nid32"], "NID_32", len(nid32_df))
+
+	trip_dirs = sorted([p for p in args.input_dir.iterdir() if p.is_dir() and p.name.startswith(args.trip_subdir_prefix)])
+	if not trip_dirs:
+		print(f"Keine Trip-Unterordner mit Praefix '{args.trip_subdir_prefix}' gefunden.")
+	else:
+		for trip_dir in trip_dirs:
+			trip_input = resolve_trip_input_path(trip_dir, args.file_prefix)
+			if trip_input is None:
+				print(f"Keine Trip-Datei in {trip_dir} gefunden.")
+				continue
+
+			trip_df = load_merged(trip_input)
+			if trip_df.empty:
+				print(f"Keine Daten in {trip_input} gefunden.")
+				continue
+
+			trip_plot_path = trip_dir / f"{trip_input.stem}_interactive.html"
+			write_plot(build_merged_figure(trip_df), trip_plot_path, trip_dir.name, len(trip_df))
 
 
 if __name__ == "__main__":

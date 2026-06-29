@@ -2,13 +2,14 @@
 
 <#
 .SYNOPSIS
-    Verarbeitet alle Ordner in 01_Data mit PCAPNG-Dateien durch den kompletten Workflow.
+    Verarbeitet alle Ordner in 01_Data mit NID-Parquet-Dateien durch den Merge-/Trip-/Plot-Workflow.
 
 .DESCRIPTION
-    Für jeden Unterordner in "C:\Users\Anton\Documents\Bachelorarbeit\01_Data" der PCAPNG-Dateien enthält:
-    - Export durchführen (nur Parquet, kein CSV)
+    Für jeden Unterordner in "C:\Users\Anton\Documents\Bachelorarbeit\01_Data" mit
+    NID_1/NID_6/NID_31/NID_32-Parquet-Dateien:
     - Merge durchführen
-    - Plot erstellen (alle NID-Plots plus Merged-Plot)
+    - Trips erzeugen (ohne merged.parquet)
+    - Plot erstellen (NID-Plots plus ein Plot je Trip)
     
     Alle Outputs werden im jeweiligen Ordner gespeichert.
 
@@ -53,7 +54,7 @@ if (-not (Test-Path $mainScript)) {
     exit 1
 }
 
-# Finde alle Unterordner mit PCAPNG-Dateien
+# Finde alle Unterordner
 $recordingDirs = Get-ChildItem -Path $SourceDataDir -Directory -ErrorAction SilentlyContinue
 
 if ($recordingDirs.Count -eq 0) {
@@ -76,75 +77,53 @@ foreach ($dir in $recordingDirs) {
     $dirName = $dir.Name
     $dirPath = $dir.FullName
     
-    # Suche nach PCAPNG-Dateien
-    $pcapngFiles = @(Get-ChildItem -Path $dirPath -Filter "*.pcapng" -File -ErrorAction SilentlyContinue)
-    
-    if ($pcapngFiles.Count -eq 0) {
-        Write-Host "[$processedCount/$totalDirs] [NO] $dirName - keine PCAPNG-Datei gefunden" -ForegroundColor Yellow
-        continue
-    }
-    
-    # Verarbeite die erste PCAPNG-Datei
-    $pcapngFile = $pcapngFiles[0]
-    $pcapngPath = $pcapngFile.FullName
     
     Write-Host "[$processedCount/$totalDirs] [>>] $dirName" -ForegroundColor Cyan
-    Write-Host "  Eingabedatei: $($pcapngFile.Name)" -ForegroundColor Gray
     Write-Host "  Ausgabeverzeichnis: $dirPath" -ForegroundColor Gray
     
     try {
         # Rufe main.py mit den spezifischen Parametern auf
         $startTime = Get-Date
         
-        # Extrahiere Prefix aus Ordnernamen (bis zum ersten Unterstrich oder kompletter Name)
+        # Extrahiere Prefix aus Ordnernamen (bevorzugt Datum_Index, z.B. 20260408_01)
         $dirNameParts = $dirName -split '_'
-        $outputPrefix = $dirNameParts[0]  # Erste Komponente als Prefix (z.B. "20251015")
+        if ($dirNameParts.Count -ge 2 -and $dirNameParts[1] -match '^\d+$') {
+            $outputPrefix = "$($dirNameParts[0])_$($dirNameParts[1])"
+        } elseif ($dirNameParts.Count -ge 1) {
+            $outputPrefix = $dirNameParts[0]
+        } else {
+            $outputPrefix = $dirName
+        }
         $prefixStr = if ([string]::IsNullOrWhiteSpace($outputPrefix)) { "" } else { "$outputPrefix`_" }
 
-        $exportOutputs = @(
+        $nidInputs = @(
             (Join-Path $dirPath "${prefixStr}NID_1.parquet"),
             (Join-Path $dirPath "${prefixStr}NID_6.parquet"),
             (Join-Path $dirPath "${prefixStr}NID_31.parquet"),
             (Join-Path $dirPath "${prefixStr}NID_32.parquet")
         )
-        $mergeOutput = Join-Path $dirPath "${prefixStr}merged.parquet"
-        $plotOutputs = @(
-            (Join-Path $dirPath "${prefixStr}NID_1_interactive.html"),
-            (Join-Path $dirPath "${prefixStr}NID_6_interactive.html"),
-            (Join-Path $dirPath "${prefixStr}NID_31_interactive.html"),
-            (Join-Path $dirPath "${prefixStr}NID_32_interactive.html"),
-            (Join-Path $dirPath "${prefixStr}merged_interactive.html")
-        )
 
-        $skipExport = ($exportOutputs | ForEach-Object { Test-Path $_ }) -notcontains $false
-        $skipMerge = Test-Path $mergeOutput
-        $skipPlot = ($plotOutputs | ForEach-Object { Test-Path $_ }) -notcontains $false
-
-        if ($skipExport) {
-            Write-Host "  [SKIP] Export bereits vorhanden, ueberspringe Schritt." -ForegroundColor Yellow
-        }
-        if ($skipMerge) {
-            Write-Host "  [SKIP] Merge bereits vorhanden, ueberspringe Schritt." -ForegroundColor Yellow
-        }
-        if ($skipPlot) {
-            Write-Host "  [SKIP] Plot bereits vorhanden, ueberspringe Schritt." -ForegroundColor Yellow
-        }
-
-        if ($skipExport -and $skipMerge -and $skipPlot) {
-            Write-Host "  [OK] Alle Ergebnisdateien vorhanden, Ordner wird komplett uebersprungen." -ForegroundColor Green
-            $successCount++
+        $missingNids = @($nidInputs | Where-Object { -not (Test-Path $_) })
+        if ($missingNids.Count -gt 0) {
+            Write-Host "  [NO] NID-Parquet-Dateien unvollstaendig, Ordner wird uebersprungen." -ForegroundColor Yellow
+            foreach ($missing in $missingNids) {
+                Write-Host "    fehlt: $missing" -ForegroundColor Yellow
+            }
             Write-Host ""
             continue
         }
 
+        $skipExport = $true
+        $skipMerge = $false
+        $skipPlot = $false
+
         $mainArgs = @(
             "-u",
             $mainScript,
-            "--input-pcapng", $pcapngPath,
             "--output-dir", $dirPath,
             "--output-prefix", $outputPrefix
         )
-        if ($skipExport) { $mainArgs += "--skip-export" }
+        $mainArgs += "--skip-export"
         if ($skipMerge) { $mainArgs += "--skip-merge" }
         if ($skipPlot) { $mainArgs += "--skip-plot" }
         

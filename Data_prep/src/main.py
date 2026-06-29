@@ -12,12 +12,20 @@ DEFAULT_INPUT_PCAP = DEFAULT_INPUT_DIR / "20260508_merged.pcapng"
 DEFAULT_MERGED_CSV_OUTPUT = DEFAULT_OUTPUT_DIR / "merged.csv"
 DEFAULT_MERGED_PARQUET_OUTPUT = DEFAULT_OUTPUT_DIR / "merged.parquet"
 
-
-# Flags: hier zentral steuern, was die Pipeline ausfuehrt.
 CSV_EXPORT = False
-PARQUET_EXPORT = True
+PARQUET_EXPORT = False
 PLOT_ALL = True
 PLOT_MERGED = False
+
+MERGE_FREQ = "100ms"
+MOVING_AVERAGE_WINDOW = 5
+MAX_ZERO_RUN = 2
+MAX_AGE_MS = 1000
+STANDSTILL_MIN_MINUTES = 10
+STANDSTILL_BUFFER_MINUTES = 5
+TRIP_SPLIT_ENABLED = True
+TRIPS_ONLY_OUTPUT = True
+TRIP_SUBDIR_PREFIX = "trip"
 
 
 def run_step(step_name: str, command: list[str]) -> None:
@@ -54,25 +62,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--skip-merge", action="store_true", help="Merge-Schritt ueberspringen.")
     parser.add_argument("--skip-plot", action="store_true", help="Plot-Schritt ueberspringen.")
 
-    parser.add_argument("--freq", default="100ms", help="Merge-Zeitraster, z.B. 100ms oder 50ms.")
-    parser.add_argument(
-        "--moving-average-window",
-        type=int,
-        default=5,
-        help="Fenstergroesse fuer den Moving Average im Merge.",
-    )
-    parser.add_argument(
-        "--max-zero-run",
-        type=int,
-        default=2,
-        help="Maximale Laenge kurzer Null-Sequenzen fuer die Label-Korrektur.",
-    )
-    parser.add_argument(
-        "--max-age-ms",
-        type=int,
-        default=1000,
-        help="Maximales Alter beim asof-Merge in Millisekunden.",
-    )
     parser.add_argument(
         "--merge-csv-output",
         type=Path,
@@ -131,22 +120,32 @@ def main() -> None:
             python_exec,
             str(SRC_DIR / "merge.py"),
             "--freq",
-            args.freq,
+            MERGE_FREQ,
             "--input-dir",
             str(args.output_dir),
             "--input-prefix",
             args.output_prefix,
             "--moving-average-window",
-            str(args.moving_average_window),
+            str(MOVING_AVERAGE_WINDOW),
             "--max-zero-run",
-            str(args.max_zero_run),
+            str(MAX_ZERO_RUN),
             "--max-age-ms",
-            str(args.max_age_ms),
+            str(MAX_AGE_MS),
+            "--standstill-min-minutes",
+            str(STANDSTILL_MIN_MINUTES),
+            "--standstill-buffer-minutes",
+            str(STANDSTILL_BUFFER_MINUTES),
             "--csv-output",
             str(merge_csv_output),
             "--parquet-output",
             str(merge_parquet_output),
+            "--trip-subdir-prefix",
+            TRIP_SUBDIR_PREFIX,
         ]
+        if not TRIP_SPLIT_ENABLED:
+            merge_cmd.append("--no-trip-split")
+        if TRIPS_ONLY_OUTPUT:
+            merge_cmd.append("--trips-only")
         run_step("Merge", merge_cmd)
     else:
         print("\n=== Merge ===")
@@ -162,7 +161,11 @@ def main() -> None:
             str(args.output_dir),
             "--file-prefix",
             args.output_prefix,
+            "--trip-subdir-prefix",
+            TRIP_SUBDIR_PREFIX,
         ]
+        if not PLOT_MERGED:
+            plot_cmd.append("--skip-merged-plot")
         if PLOT_MERGED and not PLOT_ALL:
             plot_cmd.append("--merged-only")
         run_step("Plot", plot_cmd)

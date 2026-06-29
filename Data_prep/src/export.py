@@ -223,7 +223,6 @@ def build_nid6_export(input_pcap: Path, output_dir: Path, output_prefix: str = "
     
     nid6_df = pd.DataFrame(rows)
     
-    # Spalten-Reihenfolge: timestamp, dann Velocities, dann A_EST, dann Gradienten
     col_order = ['timestamp', 'v_est', 'a_est', 'v_mrsp', 'v_permitted'] + [f'grad[{i}]' for i in range(10)]
     nid6_df = nid6_df[col_order]
 
