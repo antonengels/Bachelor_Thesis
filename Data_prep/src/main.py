@@ -16,7 +16,7 @@ DEFAULT_MERGED_PARQUET_OUTPUT = DEFAULT_OUTPUT_DIR / "merged.parquet"
 # Flags: hier zentral steuern, was die Pipeline ausfuehrt.
 CSV_EXPORT = False
 PARQUET_EXPORT = True
-PLOT_ALL = False
+PLOT_ALL = True
 PLOT_MERGED = False
 
 
@@ -153,7 +153,16 @@ def main() -> None:
         print("Uebersprungen (--skip-merge).")
 
     if not args.skip_plot and (PLOT_ALL or PLOT_MERGED):
-        plot_cmd = [python_exec, str(SRC_DIR / "plot.py")]
+        plot_cmd = [
+            python_exec,
+            str(SRC_DIR / "plot.py"),
+            "--input-dir",
+            str(args.output_dir),
+            "--output-dir",
+            str(args.output_dir),
+            "--file-prefix",
+            args.output_prefix,
+        ]
         if PLOT_MERGED and not PLOT_ALL:
             plot_cmd.append("--merged-only")
         run_step("Plot", plot_cmd)

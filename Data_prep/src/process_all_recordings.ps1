@@ -8,7 +8,7 @@
     Für jeden Unterordner in "C:\Users\Anton\Documents\Bachelorarbeit\01_Data" der PCAPNG-Dateien enthält:
     - Export durchführen (nur Parquet, kein CSV)
     - Merge durchführen
-    - Plot erstellen (nur Merged-Plot)
+    - Plot erstellen (alle NID-Plots plus Merged-Plot)
     
     Alle Outputs werden im jeweiligen Ordner gespeichert.
 
@@ -99,11 +99,56 @@ foreach ($dir in $recordingDirs) {
         # Extrahiere Prefix aus Ordnernamen (bis zum ersten Unterstrich oder kompletter Name)
         $dirNameParts = $dirName -split '_'
         $outputPrefix = $dirNameParts[0]  # Erste Komponente als Prefix (z.B. "20251015")
+        $prefixStr = if ([string]::IsNullOrWhiteSpace($outputPrefix)) { "" } else { "$outputPrefix`_" }
+
+        $exportOutputs = @(
+            (Join-Path $dirPath "${prefixStr}NID_1.parquet"),
+            (Join-Path $dirPath "${prefixStr}NID_6.parquet"),
+            (Join-Path $dirPath "${prefixStr}NID_31.parquet"),
+            (Join-Path $dirPath "${prefixStr}NID_32.parquet")
+        )
+        $mergeOutput = Join-Path $dirPath "${prefixStr}merged.parquet"
+        $plotOutputs = @(
+            (Join-Path $dirPath "${prefixStr}NID_1_interactive.html"),
+            (Join-Path $dirPath "${prefixStr}NID_6_interactive.html"),
+            (Join-Path $dirPath "${prefixStr}NID_31_interactive.html"),
+            (Join-Path $dirPath "${prefixStr}NID_32_interactive.html"),
+            (Join-Path $dirPath "${prefixStr}merged_interactive.html")
+        )
+
+        $skipExport = ($exportOutputs | ForEach-Object { Test-Path $_ }) -notcontains $false
+        $skipMerge = Test-Path $mergeOutput
+        $skipPlot = ($plotOutputs | ForEach-Object { Test-Path $_ }) -notcontains $false
+
+        if ($skipExport) {
+            Write-Host "  [SKIP] Export bereits vorhanden, ueberspringe Schritt." -ForegroundColor Yellow
+        }
+        if ($skipMerge) {
+            Write-Host "  [SKIP] Merge bereits vorhanden, ueberspringe Schritt." -ForegroundColor Yellow
+        }
+        if ($skipPlot) {
+            Write-Host "  [SKIP] Plot bereits vorhanden, ueberspringe Schritt." -ForegroundColor Yellow
+        }
+
+        if ($skipExport -and $skipMerge -and $skipPlot) {
+            Write-Host "  [OK] Alle Ergebnisdateien vorhanden, Ordner wird komplett uebersprungen." -ForegroundColor Green
+            $successCount++
+            Write-Host ""
+            continue
+        }
+
+        $mainArgs = @(
+            "-u",
+            $mainScript,
+            "--input-pcapng", $pcapngPath,
+            "--output-dir", $dirPath,
+            "--output-prefix", $outputPrefix
+        )
+        if ($skipExport) { $mainArgs += "--skip-export" }
+        if ($skipMerge) { $mainArgs += "--skip-merge" }
+        if ($skipPlot) { $mainArgs += "--skip-plot" }
         
-        & $pythonExe -u $mainScript `
-            --input-pcapng $pcapngPath `
-            --output-dir $dirPath `
-            --output-prefix $outputPrefix `
+        & $pythonExe $mainArgs `
             2>&1 | ForEach-Object {
                 $line = $_
                 if ($line -match "OK:" -or $line -match "Zeilen:" -or $line -match "Spalten:") {
