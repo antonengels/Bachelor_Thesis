@@ -104,16 +104,46 @@ foreach ($dir in $recordingDirs) {
         )
 
         $missingNids = @($nidInputs | Where-Object { -not (Test-Path $_) })
-        if ($missingNids.Count -gt 0) {
-            Write-Host "  [NO] NID-Parquet-Dateien unvollstaendig, Ordner wird uebersprungen." -ForegroundColor Yellow
+
+        $pcapCandidates = @(
+            (Join-Path $dirPath "${prefixStr}merged.pcapng"),
+            (Join-Path $dirPath "merged.pcapng")
+        )
+        $autoPcapCandidates = @(Get-ChildItem -Path $dirPath -File -Filter "*merged*.pcapng" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName)
+        if ($autoPcapCandidates.Count -gt 0) {
+            $pcapCandidates += $autoPcapCandidates
+        }
+        $selectedPcap = $pcapCandidates | Select-Object -Unique | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+        $skipExport = ($missingNids.Count -eq 0)
+        if (-not $skipExport -and [string]::IsNullOrWhiteSpace($selectedPcap)) {
+            Write-Host "  [NO] NID-Parquet-Dateien unvollstaendig, Exportquelle fehlt. Ordner wird uebersprungen." -ForegroundColor Yellow
             foreach ($missing in $missingNids) {
                 Write-Host "    fehlt: $missing" -ForegroundColor Yellow
             }
+            Write-Host "    erwartet: merged.pcapng (oder *merged*.pcapng)" -ForegroundColor Yellow
             Write-Host ""
             continue
         }
 
-        $skipExport = $true
+        if (-not $skipExport) {
+            Write-Host "  [INFO] Fehlende NID-Parquets erkannt, Export aus PCAP wird ausgefuehrt." -ForegroundColor Yellow
+            Write-Host "    Quelle: $selectedPcap" -ForegroundColor Yellow
+        }
+
+        # Vorhandene Trips und NID-Plots entfernen, damit der Split/Plot pro Lauf neu erzeugt wird.
+        $tripDirs = @(Get-ChildItem -Path $dirPath -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "trip*" })
+        foreach ($tripDir in $tripDirs) {
+            Remove-Item -Path $tripDir.FullName -Recurse -Force -ErrorAction SilentlyContinue
+            Write-Host "  [INFO] Alte Trip-Daten entfernt: $($tripDir.FullName)" -ForegroundColor Gray
+        }
+
+        $nidPlotDir = Join-Path $dirPath "nidplot"
+        if (Test-Path $nidPlotDir) {
+            Remove-Item -Path $nidPlotDir -Recurse -Force -ErrorAction SilentlyContinue
+            Write-Host "  [INFO] Alte NID-Plots entfernt: $nidPlotDir" -ForegroundColor Gray
+        }
+
         $skipMerge = $false
         $skipPlot = $false
 
@@ -123,7 +153,11 @@ foreach ($dir in $recordingDirs) {
             "--output-dir", $dirPath,
             "--output-prefix", $outputPrefix
         )
-        $mainArgs += "--skip-export"
+        if (-not $skipExport) {
+            $mainArgs += @("--input-pcapng", $selectedPcap)
+        } else {
+            $mainArgs += "--skip-export"
+        }
         if ($skipMerge) { $mainArgs += "--skip-merge" }
         if ($skipPlot) { $mainArgs += "--skip-plot" }
         

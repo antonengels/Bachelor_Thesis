@@ -9,8 +9,8 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 DEFAULT_INPUT_DIR = BASE_DIR / 'input'
 DEFAULT_OUTPUT_DIR = BASE_DIR / 'output'
 DEFAULT_INPUT_PCAP = DEFAULT_INPUT_DIR / '20260508_merged.pcapng'
-EXPORT_CSV = True
-EXPORT_PARQUET = False
+EXPORT_CSV = False
+EXPORT_PARQUET = True
 
 
 def parse_args() -> argparse.Namespace:
