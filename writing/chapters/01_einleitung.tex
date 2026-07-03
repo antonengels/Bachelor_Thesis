@@ -1,13 +1,93 @@
 \section{Einleitung}
 
 \subsection{Problemstellung}
-Dieses Kapitel beschreibt die Motivation der Arbeit und erläutert, warum die Optimierung der Zuggeschwindigkeit hinsichtlich Energieeffizienz und Pünktlichkeit relevant ist.
+
+Die manuelle Steuerung von Zügen durch menschliche Triebfahrzeugführer bildet den gegenwärtigen Status quo im Schienenverkehr und funktioniert grundsätzlich zuverlässig. 
+Dennoch unterliegt der manuelle Fahrbetrieb starken individuellen Schwankungen, da menschliche Entscheidungen von Erfahrungswerten, individuellen Gewohnheiten und veränderlichen Umweltbedingungen abhängen \cite[vgl.~S.~2266]{chap1_Huang18}. 
+Dies führt in der Praxis zu erheblichen Inkonsistenzen: „Infolgedessen variieren die Fahrdaten von Fahrer zu Fahrer [...] Dies führt tatsächlich zu erheblichen Unterschieden sowohl beim Energieverbrauch als auch bei der Pünktlichkeit“ \cite[S.~2267]{chap1_Huang18}. 
+Um ein theoretisches Optimum in der Fahrweise zu erreichen, werden zunehmend automatische Zugsteuerungssysteme (\gls{ATO}) eingesetzt. 
+Diese klassischen Automatisierungssysteme stoßen jedoch an ihre Grenzen, da sie oft auf vordefinierten Strategien basieren und es ihnen an dynamischer Anpassungsfähigkeit in komplexen oder unvorhergesehenen Situationen mangelt \cite[vgl.~S.~2]{chap1_Huang25}. 
+Folglich bedarf es intelligenterer Systeme, um Effizienz und Pünktlichkeit im dynamischen Fahrbetrieb zu maximieren.
+
+Als vielversprechende Methode für derartige Optimierungsprobleme gilt das \gls{RL}. 
+In hochkomplexen Umgebungen, die durch kontinuierliche Zustandsräume wie Geschwindigkeit, Distanzen und Streckengradienten sowie durch die Verarbeitung massiver Datenmengen gekennzeichnet sind, stößt der Standardansatz des \gls{RL} jedoch auf ein signifikantes Hindernis. 
+Beginnt der Agent den Lernprozess bei null („Cold-Start“), ist er gezwungen, den riesigen Zustands- und Aktionsraum blind zu explorieren. 
+Da positive Rückmeldungen in derartigen Systemen oft nur spärlich vorhanden sind, scheitert dieser Ansatz in der Praxis häufig, da „große Mengen an Interaktion erforderlich sind, um ein positives Feedbacksignal zu erhalten“ \cite[S.~1]{chap1_Wexler22}. 
+Gerade bei der Bewältigung großer Datenmengen führt dies zu drastischen Konvergenzproblemen: Das Modell braucht bei einem Cold-Start entweder inakzeptabel lange, um überhaupt eine funktionierende Fahrstrategie zu erlernen oder es konvergiert frühzeitig in einem lokalen Minimum.
+
+Um diese Hürde der mangelnden oder fehlerhaften Konvergenz zu überwinden, ist ein sogenannter „Warm-Start“ unabdingbar, bei dem das implizite Wissen menschlicher Fachexperten in den Lernprozess integriert wird. 
+Da das Problem der Zugsteuerung von extremer Nichtlinearität und Komplexität geprägt ist, lässt sich ein ideales Modell kaum ohne die Berücksichtigung dieses Expertenwissens entwerfen \cite[vgl.~S.~4]{chap1_Zhou20}. 
+Die Umsetzung dieses Ansatzes offenbart jedoch die zentrale Daten- und Modellierungsproblematik: Obwohl historische Betriebsdaten theoretisch in großen Mengen vorliegen, lassen sich diese rohen Sensordaten nicht unmittelbar nutzen. 
+Sie sind oft verrauscht, fragmentiert und weisen komplexe zeitliche Abhängigkeiten auf, die zunächst strukturiert werden müssen \cite[vgl.~S.~5042]{chap1_Silva19}. 
+Der Versuch, Modelle ausschließlich offline mit solchen statischen Historiendaten zu initialisieren, birgt zudem das immense Risiko des Overfittings. 
+Anstatt eine universell anwendbare und abstrakte Fahrstrategie zu erlernen, tendieren die Modelle dazu, spezifische Trainingsstrecken in der Simulation auswendig zu lernen. 
+Dieses Phänomen resultiert häufig in einem sogenannten Extrapolationsfehler, der entsteht, wenn das Modell mit ungesehenen Situationen konfrontiert wird und diese fehlerhaft bewertet \cite[vgl.~S.~3]{chap1_Wexler22}.
 
 \subsection{Zielsetzung}
-Das primäre Ziel der Arbeit ist die Imitation des menschlichen Fahrverhaltens durch Deep Learning.
+
+Anknüpfend an die dargestellte Problematik der Modellinitialisierung und der mangelnden Konvergenz besteht das primäre Ziel dieser Bachelorarbeit in der Entwicklung und dem Training eines neuronalen Netzes mittels \gls{BC}, welches das Fahrverhalten menschlicher Triebfahrzeugführer auf Basis realer Betriebsdaten abbildet. 
+Dieses Modell soll eine robuste, generalisierbare Policy erlernen. 
+Diese Strategie soll als zuverlässige Baseline und als essenzieller „Warm-Start“ für zukünftige \gls{RL}-Anwendungen im Schienenverkehr dienen, um die Risiken einer rein zufälligen Exploration zu überwinden.
+
+Aus dieser übergeordneten Zielsetzung leitet sich die folgende zentrale Forschungsfrage der Arbeit ab:
+
+\begin{center}
+    \textit{Wie lässt sich aus unstrukturierten historischen Betriebsdaten ein künstliches neuronales Netz trainieren, das eine generalisierbare Fahrstrategie für Züge erlernt?}
+\end{center}
+
+
+Um diese Forschungsfrage zu beantworten, wird die Arbeit in drei konkrete Teilziele gegliedert. 
+Das erste Teilziel umfasst die Datenaufbereitung und das Feature Engineering. 
+Hierbei liegt der Fokus auf der Transformation der unstrukturierten Rohdaten in eine strukturierte, für das maschinelle Lernen nutzbare Datenrepräsentation, bestehend aus definierten Fahrzuständen und den dazugehörigen Aktionen. 
+Ziel ist es, essenzielle Input-Features wie beispielsweise den Streckengradienten, die Geschwindigkeit oder die Distanz zu Stoppstellen zu identifizieren, um dem Modell kausale fahrphysikalische Zusammenhänge beizubringen.
+
+Das zweite Teilziel beinhaltet die Konzeptionierung und Implementierung einer geeigneten Deep-Learning-Architektur. 
+Das Modell muss in der Lage sein, die komplexen, nicht-linearen Zusammenhänge zwischen den topologischen Eingangsdaten der Strecke und der Ausgangsgröße - Hebelstellungen für Leistung und Bremse - fehlerfrei abzubilden und zu verarbeiten.
+
+Das dritte Teilziel bildet die Verhinderung von Overfitting und die Sicherstellung der Generalisierungsfähigkeit. 
+Durch die sorgfältige Auswahl und Anwendung von Regularisierungstechniken und strukturierten Validierungsstrategien muss gewährleistet werden, dass das Modell die spezifischen Trainingsstrecken nicht lediglich auswendig lernt. 
+Es muss die zugrundeliegende Fahrstrategie so abstrahieren, dass das System auch auf gänzlich unbekannten Streckenabschnitten valide Handlungen prädizieren kann.
+
+Das erwartete Ergebnis dieser Arbeit ist ein evaluiertes Modell, dessen Prädiktionsgüte - gemessen an der Abweichung der prädizierten Hebelstellungen im direkten Vergleich zur menschlichen Referenz - auf ungesehenen Testdaten quantifiziert ist. 
+Mit diesem Artefakt soll der Machbarkeitsnachweis erbracht werden, dass sich eine robuste Fahrstrategie erfolgreich aus historischen Betriebsdaten extrahieren lässt.
 
 \subsection{Vorgehensweise}
-Die Arbeit folgt einem methodischen Fahrplan vom Data Preprocessing über das Modelltraining bis zur potenziellen Integration in eine Simulationsumgebung.
+
+Zur Erreichung der formulierten Zielsetzung und Beantwortung der Forschungsfrage folgt die vorliegende Arbeit einem iterativen, experimentellen Ansatz der Modellentwicklung. 
+Da maschinelles Lernen grundlegend hypothesengetrieben ist, werden die Phasen der Datenaufbereitung, des Trainings und der Evaluation in mehreren Zyklen durchlaufen, bis die Prädiktionsgüte der angestrebten Policy maximiert ist.
+
+Den Ausgangspunkt der methodischen Vorgehensweise bildet eine theoretische Fundierung in Form einer Literaturrecherche zu den Themenbereichen \gls{BC} und Regularisierungsstrategien im Deep Learning. 
+Darauf aufbauend erfolgt eine \gls{EDA} der realen Zugdaten, um systematische Muster, Rauschen und fehlende Werte frühzeitig zu identifizieren und das notwendige Datenverständnis aufzubauen.
+
+Im Anschluss wird eine deterministische Daten-Pipeline für das Preprocessing und Feature Engineering entwickelt. 
+In diesem systematischen Umgang mit den Rohdaten werden die historischen Sensordaten bereinigt, normalisiert und in diskrete Zeitreihen-Sequenzen überführt. 
+Dabei wird der Zustandsraum, bestehend aus den definierten Input-Features, mathematisch formalisiert und der Aktionsraum, welcher die Hebelstellungen als Ausgabewerte abbildet, extrahiert.
+
+Die eigentliche iterative Modellentwicklung erfolgt anschließend unter der Verwendung des Frameworks PyTorch. 
+Um eine verlässliche Vergleichsbasis zu schaffen, beginnt der Programmier- und Trainingsprozess mit einer simplen Baseline-Architektur, wie beispielsweise einem einfachen Feedforward Neural Network. 
+Durch eine schrittweise Erhöhung der Modellkomplexität und ein systematisches Hyperparameter-Tuning wird die Policy im weiteren Verlauf kontinuierlich trainiert und optimiert.
+
+Um das im Vorfeld definierte Risiko des Overfittings methodisch auszuschließen, schließt sich eine strikte Evaluation und Generalisierungsprüfung an. 
+Hierfür wird eine rigorose Trennung der Daten in Trainings-, Validierungs- und Testmengen vorgenommen. 
+Dies erfolgt primär durch ein streckenbasiertes Splitting, bei dem das Modell beispielsweise auf Streckendaten der Route A trainiert und auf den Daten einer ungesehenen Route B getestet wird. 
+Die Beurteilung der Modellleistung erfolgt anhand quantitativer Metriken, insbesondere dem \gls{MSE} zwischen der Vorhersage des Algorithmus und der tatsächlichen Handlung des menschlichen Fahrers.
+
+In der abschließenden Synthese werden die experimentellen Ergebnisse interpretiert und kritisch hinterfragt. 
+Darauf basierend wird methodisch bewertet, inwiefern das finale Modell die notwendigen Voraussetzungen erfüllt, um in zukünftigen Anwendungsfällen als fundierter „Warm-Start“ für \gls{RL}-Agenten im Schienenverkehr zu fungieren.
 
 \subsection{Abgrenzung}
-Der Untersuchungsumfang (Scope) wird klar eingegrenzt. Tests in physikalischen Simulatoren oder realen Zügen auf der Strecke sind explizit nicht Bestandteil dieser Arbeit.
+
+Um den Rahmen dieser Bachelorarbeit präzise zu definieren, ist eine inhaltliche und methodische Abgrenzung der Thematik erforderlich. 
+Es wird ausdrücklich darauf hingewiesen, dass das Training eines \gls{RL}-Agenten - beispielsweise mittels Algorithmen wie \gls{PPO} oder \gls{SAC} - zur aktiven Optimierung einer Reward-Funktion nicht Bestandteil dieser Untersuchung ist. 
+Die Arbeit beschränkt sich stattdessen auf das Paradigma des \gls{SL} in Form von \gls{BC}. 
+Der Fokus liegt ausschließlich darauf, das Kaltstartproblem zukünftiger \gls{RL}-Anwendungen zu lösen, indem ein vortrainiertes neuronales Netz als initiale Ausgangsbasis bereitgestellt wird.
+
+Infolgedessen ist auch die Konzeptionierung oder vollumfängliche Implementierung eines interaktiven \gls{RL}-Loops, welcher die Interaktion zwischen Agent und Umgebung beispielsweise über ein Framework wie Gymnasium abbildet, primär nicht Teil des Kernscopes. 
+Ein rudimentärer Aufbau einer solchen Umgebung wird im Rahmen dieser Arbeit allenfalls als theoretische Vorbereitung für die Übergabe an nachfolgende Forschungsprojekte betrachtet, dient jedoch zu keinem Zeitpunkt dem eigenen Modelltraining.
+
+Darüber hinaus stützt sich die Modellbildung ausnahmslos auf das Offline-Learning mit realen, historischen Betriebsdaten. 
+Die Entwicklung eines physikalischen Zugsimulators zur detaillierten Modellierung von Einflussgrößen wie Zugkraft, Roll- oder Luftwiderstand zwecks Generierung synthetischer Daten wird konsequent ausgeschlossen.
+
+Abschließend beschränkt sich die Evaluation des entwickelten Modells auf eine reine Offline-Validierung anhand zurückgehaltener Test-Datensätze. 
+Ein Deployment des Modells auf eingebetteter Hardware innerhalb eines Zuges, die Integration in reale, operative Zugleitsysteme sowie die Durchführung physischer Testfahrten sind strikt ausgeschlossen. 
+Ebenso bleiben harte Echtzeitanforderungen an die Inferenzzeit des Modells in der aktuellen Phase der Forschungsarbeit unberücksichtigt.
