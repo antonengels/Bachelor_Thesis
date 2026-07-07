@@ -1,15 +1,103 @@
 \section{Theoretische Grundlagen}
 
 \subsection{Grundlagen des Supervised Learning}
-Dieses Kapitel definiert das mathematische Fundament des Supervised Learning und erklärt Loss-Funktionen sowie Optimizer zur Fehlerminimierung während des Trainings.
+
+Beim \gls{SL} trainiert ein Algorithmus anhand eines Datensatzes, der sowohl die Eingangsmerkmale (Features) als auch die durch einen Supervisor vorgegebenen, korrekten Zielwerte (Labels) enthält \cite[vgl.~S.~104f]{chap2_Goo16}. 
+Das primäre Ziel dieses Paradigmas ist es, eine mathematische Zuordnung von Inputs zu Outputs zu erlernen, um in der Folge für neue, ungesehene Daten präzise Vorhersagen treffen zu können \cite[vgl.~S.~3]{chap2_Mur12}.
+
+\subsubsection{Mathematische Formalisierung und Problemklassifikation}
+
+Formell lässt sich ein Datensatz für das \gls{SL} als $\mathcal{D} = \{(x_i, y_i)\}_{i=1}^N$ definieren. 
+Hierbei repräsentiert $x_i \in \mathbb{R}^d$ den $d$-dimensionalen Eingangsvektor (Feature-Vektor) und $y_i$ den entsprechenden korrekten Zielwert. 
+Das fundamentale Ziel ist es, ein durch den Parametervektor $\theta$ (Gewichte und Biases) charakterisiertes Modell $f_\theta$ so zu trainieren, dass die Vorhersage $\hat{y}_i = f_\theta(x_i)$ den tatsächlichen Werten $y_i$ möglichst nahekommt \cite[vgl.~S.~8f]{chap2_Ter25}.
+
+Da die in dieser Arbeit vorherzusagenden Zielvariablen -- spezifisch die Hebelstellungen für Leistung und Bremse -- kontinuierliche Werte annehmen, wird das Problem mathematisch der Regression zugeordnet. 
+Dies grenzt sich deutlich von der Klassifikation ab, bei der das Modell diskrete oder kategoriale Klassenlabels prädiziert \cite[vgl.~S.~3]{chap2_Bis06}.
+
+\subsubsection{Fehlerbewertung mittels Verlustfunktion}
+
+Um objektiv zu bewerten, wie stark die Prädiktionen des Modells von der Ground Truth abweichen, wird eine Verlustfunktion (Loss Function) $\mathcal{L}$ herangezogen. 
+Da die wahre Verteilung der Daten in der Praxis meist unbekannt ist, approximiert das Modell das optimale Risiko, indem es den Fehler auf dem vorliegenden empirischen Trainingsdatensatz minimiert. 
+Dieser Trainingsprozess wird als \gls{ERM} bezeichnet \cite[vgl.~S.~274-275]{chap2_Goo16}.
+
+Für Regressionsprobleme ist der \gls{MSE} die gängigste Metrik. 
+Er berechnet sich aus dem Durchschnitt der quadrierten Differenzen zwischen den prädizierten und den wahren Werten, wie in Gleichung (\ref{eq:mse}) dargestellt:
+
+\begin{equation} \label{eq:mse}
+\mathcal{L}_{MSE}(\theta) = \frac{1}{N} \sum_{i=1}^N \left( f_\theta(x_i) - y_i \right)^2
+\end{equation}
+
+Ein wissenschaftlich kritischer Aspekt des in Gleichung (\ref{eq:mse}) definierten \gls{MSE} ist seine ausgeprägte Anfälligkeit für Ausreißer. 
+Durch die Quadrierung der Fehler erhalten große Abweichungen einen überproportional hohen Einfluss auf den berechneten Loss \cite[vgl.~S.~8]{chap2_Ter25}. 
+Für reale, teils verrauschte Sensordaten im Schienenverkehr erweist sich dies oft als problematisch. 
+Eine fundierte Alternative bieten robuste Verlustfunktionen wie der Huber-Loss. 
+Diese steigen bei großen Fehlern nur noch linear an, wodurch die Parameter-Updates vor extremen Ausreißern geschützt werden, während sie für kleine Abweichungen die vorteilhaften, glatten Optimierungseigenschaften des \gls{MSE} beibehalten \cite[vgl.~S.~11f]{chap2_Ter25}, \cite[vgl.~S.~349-350]{chap2_Has09}.
+
+\subsubsection{Optimierungsalgorithmen und Gradientenabstieg}
+
+Um den berechneten Fehler zu minimieren, müssen die Parameter $\theta$ des Netzes zielgerichtet angepasst werden. 
+Standardmäßig erfolgt dies durch den Gradientenabstieg (Gradient Descent). 
+"In jedem Schritt wird der Parametervektor entgegen der Richtung des steilsten Anstiegs -- also des Gradienten der Verlustfunktion -- aktualisiert" \cite[S.~240]{chap2_Bis06}. 
+Die fundamentale Update-Regel ist in Gleichung (\ref{eq:gradient_descent}) definiert:
+
+\begin{equation} \label{eq:gradient_descent}
+\theta \leftarrow \theta - \eta \nabla_\theta \mathcal{L}(\theta)
+\end{equation}
+
+Der Hyperparameter $\eta > 0$ in Gleichung (\ref{eq:gradient_descent}) bezeichnet dabei die \gls{LR}, welche die Schrittweite der Parameteranpassung bestimmt. 
+Um den Gradienten $\nabla_\theta \mathcal{L}(\theta)$ in tiefen neuronalen Netzen für jedes einzelne Gewicht effizient berechnen zu können, wird der Backpropagation-Algorithmus genutzt. 
+Dieser wendet die mathematische Kettenregel an, um den Fehler von der Ausgabeschicht rückwärts durch die verborgenen Schichten des gesamten Netzes zu propagieren \cite[vgl.~S.~204f]{chap2_Goo16}.
+
+In der Praxis wird der Gradientenabstieg selten über den gesamten Datensatz gleichzeitig berechnet. 
+Stattdessen nutzt der \gls{SGD} kleine, zufällig gewählte Teilmengen, sogenannte Mini-Batches, was den Lernprozess massiv beschleunigt \cite[vgl.~S.~277]{chap2_Goo16}. 
+In modernen Deep-Learning-Anwendungen hat sich zudem der \gls{Adam}-Optimizer als Standard etabliert. 
+\gls{Adam} erweitert den klassischen \gls{SGD}, indem er dynamische, parameterspezifische Lernraten mit einem Trägheitsterm (Momentum) kombiniert, was zu einer schnelleren und deutlich robusteren Konvergenz während des Trainings führt \cite[vgl.~S.~307-308]{chap2_Goo16}.
 
 \subsection{Behavior Cloning}
 
+Aufbauend auf den Prinzipien des \gls{SL} lässt sich das Erlernen von optimalen Steuerungsstrategien auf ein klassisches Regressionsproblem reduzieren. 
+In diesem Kontext fungiert das Modell als Schüler, da es schlichtweg darauf trainiert wird, eine Policy zu erlernen, die das Verhalten eines Experten unter der Verteilung der Trainingsdaten nachahmt und dessen Aktionen vorhersagt \cite[vgl.~S.~2f]{chap2_Ros10}. 
+Folglich ist „\gls{BC} [...] eine Form des \gls{SL}, die sensomotorische Policies aus offline gesammelten Daten erlernen kann. 
+Die einzigen Voraussetzungen sind Paare von sensorischen Eingangsbeobachtungen, die mit Expertenaktionen verknüpft sind“ \cite[S.~9330]{chap2_Cod19}. 
+
+In der modernen Forschung zur Automatisierung hat sich dieser Ansatz fest etabliert: 
+„Das vorherrschende Paradigma ist das \gls{IL}, am häufigsten in Form von \gls{BC}, welches das Erlernen von Policies als eine überwachte Vorhersageaufgabe unter Verwendung menschlicher Fahr-Demonstrationen formuliert“ \cite[S.~1f]{chap2_Kar25}. 
+Dabei wird die grundlegende Methodik des \gls{SL} direkt übernommen: 
+„Ein typischer Ansatz für das \gls{IL} besteht darin, einen [...] Regressor zu trainieren, um das Verhalten eines Experten vorherzusagen, gegeben Trainingsdaten der angetroffenen Beobachtungen (Eingabe) und der vom Experten ausgeführten Aktionen (Ausgabe)“ \cite[S.~1f]{chap2_Ros10}.
+
 \subsubsection{Mathematische Formulierung}
-Behavior Cloning wird als Imitation Learning in Form eines Regressionsproblems für ein direktes State-Action-Mapping formalisiert.
+
+Um eine reale Zugfahrt in dieses \gls{SL}-Paradigma zu überführen, muss die Steuerungsaufgabe formalisiert werden. 
+Sie lässt sich als Markov-Entscheidungsprozess ausdrücken, der aus Zuständen, Aktionen, Übergangsdynamiken der Umgebung und Belohnungen besteht. 
+Da beim \gls{BC} die zugrundeliegenden Dynamiken der Welt - wie etwa die komplexe Physik des Zuges - und exakte Belohnungsfunktionen jedoch meist unbekannt sind, verlässt man sich stattdessen auf das Lernen aus einem Datensatz von Expertendemonstrationen \cite[vgl.~S.~2]{chap2_Kar25}. 
+
+Die historischen Fahrdaten des Experten werden als zeitliche Sequenzen erfasst. 
+„Wir bezeichnen das Tupel, das die während einer Episode angetroffenen Zustände und Aktionen enthält, als Trajektorie $\tau_i = (s_0, a_0, \dots, s_{T_i}, a_{T_i})$“ \cite[S.~4]{chap2_Are20}. 
+Analog zu den Eingangsvektoren $x_i$ und Zielwerten $y_i$ aus Kapitel 2.1 entsprechen die Zustände $s_t$ (bzw. Beobachtungen $o_t$) den Eingangsmerkmalen und die Aktionen $a_t$ den Zielwerten. 
+
+Das zu trainierende neuronale Netz repräsentiert dabei die Fahrstrategie. 
+„Eine End-to-End-Policy wird dargestellt als $a_t \sim \pi_\theta(a \mid o_t)$, wobei $\theta$ die gelernten Parameter, $o_t$ die Eingangsbeobachtung und $a_t$ eine abstrakte Ausgabeaktion bezeichnet“ \cite[S.~2]{chap2_Kar25}. 
+Das primäre Ziel während des Trainings ist es, eine Policy $\pi_\theta$ zu finden, die den Trainingsfehler (Surrogate Loss) unter der vom Experten induzierten Zustandsverteilung minimiert, sodass die vom Modell generierten Aktionen denen des menschlichen Fahrers bestmöglich entsprechen \cite[vgl.~S.~2f]{chap2_Ros10}.
 
 \subsubsection{Covariate Shift und Compounding Errors}
-Es wird die Fehlerakkumulation erklärt, die auftritt, sobald das Modell von den im Training beobachteten States abweicht.
+
+Obwohl sich \gls{BC} mathematisch als \gls{SL} formulieren lässt, birgt die Anwendung auf sequentielle Entscheidungsprozesse wie die Zugsteuerung ein fundamentales Problem. 
+Klassische statistische Lernansätze basieren auf der Annahme, dass die Trainings- und Testdaten unabhängig und identisch verteilt sind (i.i.d.-Annahme). 
+Beim \gls{BC} wird diese Annahme jedoch systematisch gebrochen: „[...] da die Vorhersage des Lernenden zukünftige Eingangsbeobachtungen/Zustände während der Ausführung der gelernten Policy beeinflusst, verletzt dies die entscheidende i.i.d.-Annahme, die von den meisten statistischen Lernansätzen getroffen wird“ \cite[S.~1]{chap2_Ros10}.
+
+In der Trainingsphase optimiert das Modell seine Parameter lediglich auf Basis der vorgegebenen Expertentrajektorien. 
+„Während des Einsatzes agieren Policies jedoch sequenziell im geschlossenen Regelkreis (Closed-Loop), wobei jede Entscheidung zukünftige Beobachtungen beeinflusst, sodass die IID-Annahme nicht mehr gilt“ \cite[S.~3]{chap2_Kar25}. 
+Diese Diskrepanz zwischen Trainings- und Inferenzzeit führt zum zentralen Problem des Behavior Cloning: 
+
+„Covariate Shift (auch Distribution Shift genannt), wohl das wichtigste Problem, tritt auf, wenn die Zustandsverteilung, auf die die eingesetzte Policy trifft, von der in den Trainingsdaten abweicht. 
+[...] Da die Policy im Closed-Loop ausgeführt wird, verstärken sich kleine Abweichungen vom Experten im Laufe der Zeit (Compounding Errors) und drängen die Policy in immer unbekanntere Regionen des Zustandsraums [...] bis sie sich nicht mehr erholen kann“ \cite[S.~3]{chap2_Kar25}.
+
+Diese Fehlerakkumulation wächst über die Zeit nicht linear, sondern quadratisch an. 
+„Insbesondere kann ein Klassifikator, der unter der Verteilung der vom Experten angetroffenen Zustände/Beobachtungen mit Wahrscheinlichkeit $\epsilon$ einen Fehler macht, unter der Verteilung der Zustände, die der Klassifikator selbst induziert, im Erwartungswert über $T$ Schritte bis zu $T^2\epsilon$ Fehler machen“ \cite[S.~1]{chap2_Ros10}. 
+„Intuitiv liegt das daran, dass der Lernende, sobald er einen Fehler macht, auf völlig andere Beobachtungen stoßen kann als bei der Expertendemonstration, was zu einer Fehlerakkumulation führt“ \cite[S.~1]{chap2_Ros10}. F
+
+Wenn das Modell folglich durch eigene kleine Fehlentscheidungen in unbekannte Zustände gerät, auf die es nie trainiert wurde, ist es in der Regel nicht mehr in der Lage, sich von diesen Fehlern zu erholen (Recovery), was unweigerlich zum Versagen des Systems führt \cite[vgl.~S.~16ff]{chap2_Are20}. 
+Um dem Covariate Shift entgegenzuwirken und die Generalisierungsfähigkeit zu gewährleisten, ist der Einsatz strikter Regularisierungstechniken unerlässlich.
 
 \subsection{Geeignete Modellarchitekturen}
 
