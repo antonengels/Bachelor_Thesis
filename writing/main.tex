@@ -1,6 +1,6 @@
 \documentclass[a4paper,12pt]{article}
 
-\include{frontmatter/settings}
+\input{frontmatter/settings}
 
 % Bilder Verzeichnis einbinden
 \graphicspath{{images/}}
@@ -20,7 +20,7 @@
 \cfoot{\textbf{\thepage}}
 \pagenumbering{roman}
 
-\include{frontmatter/acronyms}
+\input{frontmatter/acronyms}
 
 % Definitionen
 \newcommand{\projName}{Entwicklung und Vortrainieren eines Reinforcement-Learning-Agenten zur Optimierung der Zuggeschwindigkeit 
@@ -46,11 +46,15 @@
     \tableofcontents
 
     % Abkürzungsverzeichnis
-    {\parskip=0pt
-        \renewcommand{\glsgroupskip}{}
-        \glsaddall
-        \printglossary[type=\acronymtype,title=Abkürzungsverzeichnis]
-    }
+     % Abkürzungsverzeichnis
+    \begingroup
+    \setstretch{.5}
+    \glsaddall
+    \printglossary[type=\acronymtype,title=Abkürzungsverzeichnis]
+    \newpage
+    \renewcommand{\glsgroupskip}{}
+    \endgroup
+    
     \newpage
 
     % Abbildungsverzeichnis
