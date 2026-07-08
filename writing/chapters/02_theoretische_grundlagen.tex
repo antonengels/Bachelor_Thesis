@@ -101,22 +101,147 @@ Um dem Covariate Shift entgegenzuwirken und die Generalisierungsfähigkeit zu ge
 
 \subsection{Geeignete Modellarchitekturen}
 
+Nachdem im vorangegangenen Kapitel das Behavior Cloning mathematisch formalisiert und die essenzielle Problematik des Covariate Shifts dargelegt wurde, bedarf es nun der Auswahl einer geeigneten Modellarchitektur. 
+Das Ziel dieses Kapitels ist es, theoretisch fundierte Kandidaten für die Policy $\pi_\theta$ vorzustellen. 
+Da die Steuerung eines Zuges eine hochgradig sequenzielle Aufgabe darstellt, in der aktuelle physikalische Zustände stark von vergangenen Aktionen abhängen, werden verschiedene Netzarchitekturen primär hinsichtlich ihrer Fähigkeit evaluiert, derartige zeitliche Abhängigkeiten zu verarbeiten. 
+Die finale Auswahl der Architektur für diese Arbeit erfolgt jedoch nicht an dieser Stelle, sondern im weiteren Verlauf auf Basis empirischer Leistungsvergleiche in einer initialen Trainingsphase.
+
 \subsubsection{Multi-Layer Perceptrons}
-Dieser Abschnitt erläutert Aufbau und Funktion einfacher Feedforward-Netze ohne zeitliches Gedächtnis.
+
+Die einfachste Form künstlicher neuronaler Netze stellen \gls{MLP} dar, welche zur Klasse der klassischen Feedforward-Netzwerke gehören (siehe Abbildung \ref{fig:mlp}). 
+In dieser Architektur wird der Input $x_t$ über Gewichte direkt und ohne Umwege auf den Output prädiziert. 
+„Diese Modelle werden als Feedforward bezeichnet, da die Informationen durch die auszuwertende Funktion von x über die Zwischenberechnungen zur Definition von f und schließlich zur Ausgabe y fließen. 
+Es gibt keine Feedback-Verbindungen, bei denen Ausgaben des Modells wieder in das Modell selbst zurückgespeist werden“ \cite[S.~168]{chap2_Goo16}. 
+
+Feedforward-Netzwerke verarbeiten Eingabedaten streng direktional. 
+Da sie folglich keinen internen Zustand oder ein Gedächtnis aufbauen können, mappen sie Eingaben lediglich statisch auf Ausgaben. 
+„MLP kann nicht aus Sequenzinformationen von Daten lernen. 
+Einfach ausgedrückt: Es verliert seine Sequenzinformationen, daher geht der Kontext verloren“ \cite[S.~3]{chap2_Ife23}.
+
+Für die Modellierung von Fahrverhalten ist diese fundamentale Amnesie kritisch. 
+Zwar punkten \gls{MLP} durch eine sehr einfache Architektur, schnelles Training und leichte Implementierbarkeit, jedoch fehlt ihnen jeglicher temporale Kontext. 
+Im Gegensatz zu rekurrenten Netzen kann ein \gls{MLP} die enorme Trägheit eines Zuges nicht erfassen. 
+Wenn der Bremshebel gezogen wird, vergehen Sekunden, bis der Bremszylinderdruck ausreichend steigt und eine Verzögerung eintritt. 
+Ein \gls{MLP} sieht im Zeitschritt $t$ lediglich die aktuelle Geschwindigkeit, ohne das Wissen, welche Aktionen im Zeitschritt $t-1$ stattgefunden haben. 
+Beim \gls{BC} führt dieses fehlende Verständnis für zeitliche Kausalitäten unweigerlich zu einem unruhigen, zitternden Fahrverhalten, dem sogenannten Chattering.
+
+\begin{figure}[htbp]
+    \centering
+    % Erzeugt einen grauen Kasten als Platzhalter (Breite: 80% der Textbreite, Höhe: 5cm)
+    \textcolor{gray}{\rule{0.8\textwidth}{5cm}} 
+    \caption{Schematische Darstellung eines \gls{MLP} mit direktionalem Informationsfluss ohne rekurrente Rückkopplungen.}
+    \label{fig:mlp}
+\end{figure}
 
 \subsubsection{Recurrent Neural Networks}
-Dieser Abschnitt beschreibt die Funktionsweise von grundlegenden RNNs zur Verarbeitung sequenzieller Zeitreihendaten mit rekurrenten Verbindungen.
+
+Um das Problem der fehlenden zeitlichen Kontextualisierung zu lösen, wurden \gls{RNN} entwickelt (siehe Abbildung \ref{fig:rnn}). 
+„Das rekurrente neuronale Netz wurde entwickelt, um Informationen, die im vorherigen Zeitschritt aufgetreten sind, über die rekurrente Kante - die Kante, die die verborgenen Knoten (Hidden Nodes) verbindet - an den nächsten Zeitschritt weiterzugeben“ \cite[S.~4]{chap2_Oh22}. 
+
+Durch die Einführung dieses verborgenen Zustands (Hidden State) $h_t$ hängt der Output des Modells nun nicht mehr ausschließlich vom aktuellen Input $x_t$ ab, sondern gleichermaßen vom Wissen aus der Vergangenheit $h_{t-1}$. 
+Damit sind \gls{RNN} in der Lage, Kontextinformationen aus vergangenen Zeitschritten an zukünftige weiterzugeben, was sie prinzipiell für Zeitreihendaten und die Abbildung sequenzieller Dynamiken prädestiniert und ihnen einen klaren Vorteil gegenüber \gls{MLP} verschafft.
+
+Ein strukturelles Defizit zeigt sich jedoch beim Training über lange Sequenzen hinweg mittels Backpropagation Through Time. 
+Durch fortlaufende Matrixmultiplikationen neigen die Fehlergradienten dazu, instabil zu werden. 
+„Das Problem der verschwindenden und explodierenden Gradienten bezieht sich auf die Tatsache, dass Gradienten durch einen solchen Graphen ebenfalls skaliert werden. Verschwindende Gradienten machen es schwer zu erkennen, in welche Richtung sich die Parameter bewegen sollten [...], während explodierende Gradienten das Lernen instabil machen können“ \cite[S.~289]{chap2_Goo16}. 
+Bei langen Zugfahrten - beispielsweise wenn ein rotes Signal bereits vor drei Kilometern erkannt wurde - scheitert das einfache \gls{RNN} an diesen verschwindenden Gradienten (Vanishing Gradients). 
+Es vergisst die frühe, aber essenzielle Information, bevor der Zug den eigentlichen Bremspunkt erreicht.
+
+\begin{figure}[htbp]
+    \centering
+    \textcolor{gray}{\rule{0.8\textwidth}{5cm}}
+    \caption{Architektur eines \gls{RNN} mit der Rückkopplungsschleife des Hidden States über die Zeit.}
+    \label{fig:rnn}
+\end{figure}
 
 \subsubsection{Long Short-Term Memory Networks}
-LSTMs erweitern RNNs durch Speicherzellen und Gate-Mechanismen, um langfristige Abhängigkeiten zu erfassen und das Problem verschwindender Gradienten zu reduzieren.
+
+Um die Limitierungen klassischer \gls{RNN} zu überwinden, wurden \gls{LSTM} konzipiert (siehe Abbildung \ref{fig:lstm}). 
+„Die erste Entwicklung von \gls{LSTM} zielte darauf ab, die Rate des verschwindenden Gradienten zu reduzieren und \gls{RNN} für Aufgaben mit Langzeitgedächtnis effektiv zu machen“ \cite[S.~4]{chap2_Ife23}. 
+
+Sie erreichen dies durch die Erweiterung der Architektur um einen Zellzustand (Cell State) $C_t$, der als eine Art internes Langzeitgedächtnis fungiert. 
+Der Informationsfluss wird dabei mathematisch präzise durch drei spezialisierte Gates reguliert: 
+„Die Architektur von LSTM hat vier Gates: Input, Forget, Output und die Memory Cell. 
+Das Gate bestimmt, was in die Memory Cell geschrieben oder daraus gelesen werden soll, wo die Informationen aufbewahrt werden“ \cite[S.~4]{chap2_Ife23}. 
+Das Forget Gate verwirft irrelevante Informationen der Vergangenheit, das Input Gate integriert neue, relevante Eingänge und das Output Gate steuert die aktuelle Ausgabe.
+
+„Sie behalten den bestehenden Hidden State bei und fügen ihm neue Inhalte hinzu. 
+Dadurch können die Fehlergradienten den Backpropagation-Prozess durchlaufen, ohne zu schnell zu verschwinden oder zu explodieren“ \cite[S.~4]{chap2_Ife23}. 
+Durch diesen additiven Mechanismus löst das \gls{LSTM} das Vanishing-Gradient-Problem. 
+Im direkten Vergleich zum Standard-\gls{RNN} ist das \gls{RNN} bei komplexen Fahrprofilen deutlich überlegen, da es sehr langfristige Abhängigkeiten - wie weite Signaldistanzen in Kombination mit langsamer Zugphysik - verlustfrei erlernen kann. 
+Der signifikante Nachteil liegt in der Rechenintensität: Die Architektur ist durch die vielen Gates äußerst parameterstark, was das Risiko von Overfitting bei kleineren Datensätzen massiv erhöht.
+
+\begin{figure}[htbp]
+    \centering
+    \textcolor{gray}{\rule{0.8\textwidth}{5cm}}
+    \caption{Aufbau einer \gls{LSTM} Zelle mit Forget, Input und Output Gate sowie dem zentralen Cell State.}
+    \label{fig:lstm}
+\end{figure}
 
 \subsubsection{Gated Recurrent Units}
-GRUs vereinfachen die LSTM-Architektur durch weniger Parameter bei ähnlicher Ausdruckskraft und ermöglichen schnelleres Training bei vergleichbarer Leistung.
+
+Eine modernere und stromlinienförmige Alternative zum \gls{LSTM} stellen die \gls{GRU} dar (siehe Abbildung \ref{fig:gru}). 
+Diese Architektur bietet eine recheneffizientere Variante, indem sie strukturelle Vereinfachungen vornimmt, ohne die Kernfunktionalität zu verlieren. 
+„Das \gls{GRU}-\gls{RNN} reduziert die Gating-Signale im Vergleich zum \gls{LSTM}-\gls{RNN}-Modell auf zwei. 
+Die beiden Gates werden Update-Gate und Reset-Gate genannt. 
+[...] Dies spart ein Gating-Signal und die dazugehörigen Parameter ein“ \cite[S.~2f]{chap2_Dey17}.
+
+Durch die Verschmelzung des Forget- und Input-Gates zu einem einzigen Update-Gate und den Verzicht auf einen separaten Zellzustand kommen \gls{GRU} mit signifikant weniger Parametern aus. 
+Dies bringt entscheidende praktische Vorteile mit sich: Das Netzwerk trainiert schneller, benötigt weniger Speicher und ist - was für diese Arbeit von strategischer Bedeutung ist - weniger anfällig für Overfitting. 
+
+Trotz der Reduktion der Parameterzahl weisen \gls{GRU} bei der Analyse sequenzieller Daten eine enorme Ausdruckskraft auf. „Es wurde festgestellt, dass das \gls{GRU}-\gls{RNN} in den meisten Fällen mit dem \gls{LSTM} vergleichbar ist oder dieses sogar übertrifft“ \cite[S.~2f]{chap2_Dey17}. 
+Lediglich bei extrem komplexen, überlangen Sequenzen kann die Prädiktionsgüte minimal geringer ausfallen als beim vollen \gls{LSTM}. Ob das leichtgewichtigere \gls{GRU} oder das komplexere \gls{LSTM} für das Behavior Cloning der realen Zugdaten besser geeignet ist, muss eine empirische Evaluation der initialen Trainingsexperimente zeigen.
+
+\begin{figure}[htbp]
+    \centering
+    \textcolor{gray}{\rule{0.8\textwidth}{5cm}}
+    \caption{Struktur einer Gated Recurrent Unit (GRU), welche den internen Zustand mit lediglich einem Reset- und Update-Gate reguliert.}
+    \label{fig:gru}
+\end{figure}
 
 \subsection{Overfitting-Prävention}
 
+Die Auswahl einer leistungsstarken Architektur, die zeitliche Abhängigkeiten verarbeiten kann, ist eine notwendige, jedoch keine hinreichende Bedingung für ein erfolgreiches Behavior Cloning. 
+Da das Modell in dieser Arbeit ausschließlich offline auf einem statischen Datensatz historischer Betriebsdaten trainiert wird, besteht ein immenses Risiko der Überanpassung (Overfitting). 
+Ein Modell leidet unter Overfitting, wenn die Lücke zwischen dem Trainingsfehler und dem Testfehler zu groß wird. Dies geschieht, wenn ein Modell aufgrund einer zu hohen Modellkapazität die spezifischen Muster und das Rauschen der Trainingsdaten regelrecht auswendig lernt (Memorization), anstatt die zugrundeliegenden Gesetzmäßigkeiten zu abstrahieren. 
+„Modelle mit hoher Kapazität können überanpassen, indem sie Eigenschaften des Trainingsdatensatzes auswendig lernen, die ihnen auf dem Testdatensatz nicht zugutekommen“ \cite[S.~111]{chap2_Goo16}. 
+Im Kontext der Zugsteuerung könnte das Netzwerk dazu tendieren, die topologischen Eigenheiten der spezifischen Trainingsstrecken starr auswendig zu lernen, anstatt eine abstrakte, physikalische und übertragbare Fahrstrategie zu generalisieren. 
+Um eine robuste Policy $\pi_\theta$ zu gewährleisten, müssen präventive Initialisierungs- und Regularisierungsstrategien angewendet werden.
+
 \subsubsection{Weight Initialization}
-Es werden Methoden für einen stabilen Trainingsstart zur Vermeidung explodierender oder verschwindender Gradienten beschrieben.
+
+Der Grundstein für ein stabiles Training und eine erfolgreiche Generalisierung wird bereits vor dem ersten Parameter-Update durch die Initialisierung der Netzgewichte $\theta$ gelegt. 
+Die bewusste und mathematisch fundierte Skalierung dieser initialen Gewichte ist kritisch für den Erfolg beim Training tiefer neuronaler Netze \cite[vgl.][S.~301ff]{chap2_Goo16}. 
+
+Werden die initialen Gewichte zu groß gewählt, führt dies - insbesondere bei tiefen oder rekurrenten Netzen - zum Problem der explodierenden Gradienten. 
+„Zu große initiale Gewichte können jedoch zu explodierenden Werten während der Vorwärts- oder Rückwärtspropagation führen. [...] Große Gewichte können auch zu extremen Werten führen, die bewirken, dass die Aktivierungsfunktion saturiert, was zu einem vollständigen Verlust des Gradienten durch saturierte Einheiten führt“ \cite[S.~301]{chap2_Goo16}. 
+Sind die Gewichte hingegen zu klein, verschwinden die Gradienten (Vanishing Gradients) und das Netzwerk lernt nicht. 
+
+Um einen vollständigen Verlust des Gradienten zu verhindern, kommen etablierte Initialisierungsstrategien wie die Xavier-Initialisierung (Glorot) oder die He-Initialisierung zum Einsatz. 
+Diese Verfahren halten die Varianz der Aktivierungen und Gradienten über die Schichten hinweg konstant. 
+Für das Training der Zug-Policy ist ein solcher stabiler Start zwingend erforderlich, damit das Modell nicht sofort in einem schlechten lokalen Minimum stagniert - beispielsweise in einem Zustand, in dem es pauschal stets den Bremshebel betätigt, nur um den anfänglichen Trainingsfehler (Loss) künstlich zu minimieren.
 
 \subsubsection{Regularisierungstechniken}
-Dieser Abschnitt erklärt die mathematische Bestrafung von Gewichten (Weight Decay) und den Einsatz von Dropout-Layern.
+
+Um die Modellkapazität während des Trainingsprozesses systematisch einzugrenzen und das Auswendiglernen von Strecken zu verhindern, werden netzinterne Regularisierungsverfahren implementiert.
+
+Die $L_2$-Regularisierung, im maschinellen Lernen häufig als Weight Decay bezeichnet, wirkt einer Überanpassung entgegen, indem sie eine mathematische Bestrafung großer Netzgewichte vornimmt \cite[vgl.][S.~230f]{chap2_Goo16}.
+„Diese Regularisierungsstrategie treibt die Gewichte näher an den Ursprung, indem ein Regularisierungsterm $\Omega(\theta) = \frac{1}{2} ||w||_2^2$ zur Zielfunktion hinzugefügt wird“ \cite[S.~230]{chap2_Goo16}. 
+Der klassischen Verlustfunktion, wie dem \gls{MSE}, wird demnach ein Penalty-Term hinzugefügt \cite[vgl.~S.~10]{chap2_Bis06}:
+
+\begin{equation} \label{eq:L2}
+\mathcal{L}_{total}(\theta) = \mathcal{L}_{MSE}(\theta) + \frac{\lambda}{2} \sum w_i^2
+\end{equation}
+
+Dieser Term zwingt den Optimierungsalgorithmus dazu, die absolute Größe der Gewichte klein zu halten. 
+Im Kontext der autonomen Zugsteuerung hat dies einen entscheidenden physikalischen Vorteil: 
+Weight Decay zwingt das Modell, seine Entscheidungen - wie etwa die Wahl des optimalen Bremspunktes - auf viele verfügbare Features (aktuelle Geschwindigkeit, Streckengradient, Signaldistanz) zu verteilen, anstatt sich auf ein einziges, möglicherweise verrauschtes Feature zu verlassen. 
+
+Ergänzend zum Weight Decay kommt das Dropout-Verfahren als recheneffiziente Regularisierungsmethode zum Einsatz. 
+Der Mechanismus greift direkt in die Netzstruktur ein: „Jedes Mal, wenn wir ein Beispiel in einen Minibatch laden, sampeln wir zufällig eine andere binäre Maske, die auf alle Eingabe- und verborgenen Einheiten im Netzwerk angewendet wird“ \cite[S.~258]{chap2_Goo16}. 
+Während des Trainings wird in jedem Forward-Pass zufällig ein bestimmter Anteil (beispielsweise $p=0.2$) der Neuronen abgeschaltet, indem deren Ausgabe auf null gesetzt wird.
+
+Durch dieses stochastische Vorgehen wird verhindert, dass sich Neuronen zu stark aneinander anpassen, was als Vermeidung von Co-Adaption bezeichnet wird. 
+Das Netz darf sich nicht darauf verlassen, dass ein bestimmtes Neuron immer die perfekte Information liefert. 
+Im Endeffekt trainiert das Netzwerk somit implizit ein großes Ensemble an unterschiedlichen Teilnetzwerken \cite[vgl.~S.~258~\&~S.~266]{chap2_Goo16}. 
+Für die Zug-Policy bedeutet dies eine massive Steigerung der Robustheit gegenüber realen Sensorausfällen, Rauschen in den historischen Betriebsdaten oder unvorhergesehenen Streckenanomalien.
