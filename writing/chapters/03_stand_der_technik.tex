@@ -2,8 +2,7 @@
 
 Die historische Entwicklung der Zugsteuerung ist geprägt von dem kontinuierlichen Bestreben, Sicherheit, Energieeffizienz und Pünktlichkeit im Schienenverkehr zu maximieren. 
 Während traditionelle, manuelle Betriebsführungen über Jahrzehnte den Standard darstellten, erwiesen sie sich mit steigender Netzdichte und Verkehrskomplexität als fehleranfällig. 
-,,Obwohl der traditionelle manuelle Fahrmodus seine eigenen Vorteile hat, ist die Entwicklung der \gls{ATO} ein unumgänglicher Trend. 
-Beim traditionellen manuellen Fahrmodus ist der Fahrer anfällig für Ermüdung''\cite[S.~1]{chap3_Liu19}. 
+Die Literatur beschreibt die Entwicklung der \gls{ATO} trotz bestehender Vorteile des manuellen Fahrmodus als unumgänglichen Trend \cite[vgl.~S.~1]{chap3_Liu19}. 
 Um menschliche Fehlerquellen zu minimieren, verlagerte sich der Stand der Technik zunächst hin zu deterministischen, starr programmierten Regelsystemen. 
 Diese konventionellen \gls{ATO}-Architekturen stoßen jedoch bei komplexen, nicht-linearen Umwelteinflüssen an ihre Grenzen. 
 Als Antwort auf diese Limitierungen rückt die aktuelle Forschung zunehmend datengetriebene Ansätze der \gls{KI}, insbesondere \gls{DRL}, in den Fokus, um hochdynamische und prädiktive Steuerungsstrategien zu realisieren.
@@ -30,15 +29,14 @@ Kommt es zu witterungsbedingten Adhäsionsverlusten (z. B. durch Nässe, reduzie
 
 Zudem besteht bei Reglern, die wie der \gls{PID}-Regler Verzögerungszeiten-dominierte Zugdynamiken (Lag) steuern, eine hohe Gefahr, dass sie zu langsam auf Traktionsstörungen reagieren \cite[vgl.~S.~4f]{chap3_Dun25}. 
 Die Notwendigkeit einer adaptiven Prädiktion verdeutlicht sich insbesondere in komplexen Streckentopologien. 
-Bei fortgeschrittenen prädiktiven Regelungen müssen sogenannte "Softness-Faktoren" online angepasst werden, da gerade in den kritischen Wendepunktbereichen der Zielgeschwindigkeitskurven das reine Tracking oft scheitert \cite[vgl.~S.~15]{chap3_Liu19}. 
+Bei fortgeschrittenen prädiktiven Regelungen müssen sogenannte ,,Softness-Faktoren'' online angepasst werden, da gerade in den kritischen Wendepunktbereichen der Zielgeschwindigkeitskurven das reine Tracking oft scheitert \cite[vgl.~S.~15]{chap3_Liu19}. 
 Dies führt unweigerlich zu der Schlussfolgerung: ,,Während ATO-Systeme in vielen U-Bahn-Systemen zunehmend Einzug gehalten haben [...], verlassen sie sich oft auf vordefinierte Betriebsstrategien und es mangelt ihnen an der dynamischen Anpassungsfähigkeit, um effektiv auf komplexe und unvorhergesehene Umstände zu reagieren'' \cite[S.~1f]{chap1_Huang25}. 
 Das intuitive, vorausschauende Handeln eines erfahrenen menschlichen Fahrers, der Streckengegebenheiten antizipiert, fehlt diesen Systemen gänzlich.
 
 \subsubsection{Paradigmenwechsel: Deep Reinforcement Learning}
 
 Um die deterministische Starrheit abzulösen, treibt die aktuelle Forschung den Einsatz von \gls{DRL} massiv voran. 
-,,Durch die kontinuierliche Interaktion mit der Umgebung entwickeln \gls{RL}-Algorithmen autonom Strategien, die bei einem breiten Spektrum von Aufgaben hervorragend abschneiden...'' \cite[S.~1]{chap3_Sha26}. 
-Durch die kontinuierliche Interaktion mit der Umgebung können \gls{RL}-Agenten Strategien erlernen und anpassen, um langfristige Ziele wie Energieeffizienz und Pünktlichkeit unter Störungen hochgradig zu optimieren \cite[vgl.~S.~1f]{chap3_Lyu26}. 
+Durch die kontinuierliche Interaktion mit der Umgebung entwickeln \gls{RL}-Agenten autonom Strategien und passen diese fortlaufend an, um langfristige Ziele wie Energieeffizienz und Pünktlichkeit auch unter Störungen zu optimieren \cite[vgl.~S.~1]{chap3_Sha26,chap3_Lyu26}. 
 
 Der Agent optimiert hierbei eine Policy $\pi_\theta(a_t \vert s_t)$, welche einen Zustand $s_t$ auf eine kontinuierliche Aktion $a_t$ abbildet. 
 Das formale Ziel der Optimierung ist die Maximierung des erwarteten, diskontierten kumulativen Rewards $J(\theta)$, formalisiert in Gleichung (\ref{eq:rl_objective}):
@@ -46,37 +44,30 @@ Das formale Ziel der Optimierung ist die Maximierung des erwarteten, diskontiert
 \begin{equation}
     J(\theta) = \mathbb{E}_{\tau \sim \pi_\theta} \left[ \sum_{t=0}^{T} \gamma^t R_t \right]
     \label{eq:rl_objective}
-\end{equation}
+\end{equation}    
 
 In der Literatur heben sich hierbei Actor-Critic-Architekturen wie die \gls{PPO} und der \gls{SAC} Algorithmus hervor. 
 \gls{PPO} balanciert als Policy-Optimierungs-Algorithmus ideal zwischen Sample-Effizienz und einfacher Implementierung, was ihn besonders attraktiv und stabil für die kontinuierliche Zugsteuerung macht \cite[vgl.~S.~41ff]{chap3_Mwa23}. 
 Im Gegensatz dazu zeigen ältere wertbasierte Methoden Defizite in der praktischen Konvergenz: 
 ,,...DDQN hat im Allgemeinen weniger Hyperparameter, die im Vergleich zu PPO abgestimmt werden müssen [...] In diesem Projekt konvergierte der DDQN-Algorithmus jedoch nicht zu einer optimalen Lösung, die alle Ziele der Arbeit erfüllte'' \cite[S.~46]{chap3_Mwa23}. 
-Auch der hochkomplexe \gls{SAC}-Algorithmus birgt Risiken in der Stabilität, da ,,...beim Bestreben, die Policy-Entropie zu maximieren, der Lernprozess von SAC manchmal destabilisiert werden kann... Eine solche Instabilität kann zu übermäßig aggressiven Policy-Aktualisierungen führen, was die Effizienz und Effektivität der Policy-Konvergenz negativ beeinflusst'' \cite[S.~1]{chap3_Sha26}.
+Auch der hochkomplexe \gls{SAC}-Algorithmus birgt Risiken in der Stabilität, da ,,[...] beim Bestreben, die Policy-Entropie zu maximieren, der Lernprozess von SAC manchmal destabilisiert werden kann... Eine solche Instabilität kann zu übermäßig aggressiven Policy-Aktualisierungen führen, was die Effizienz und Effektivität der Policy-Konvergenz negativ beeinflusst'' \cite[S.~1]{chap3_Sha26}.
 
 \subsubsection{Cold-Start und Sample Inefficiency}
+\label{sec:3.1.3}
 
-Trotz der theoretischen Mächtigkeit des \gls{DRL} scheitert die direkte Anwendung im Bahnbetrieb häufig an einem massiven informationstechnischen Engpass. 
-Wenn ein DRL-Agent vollständig ohne Vorwissen (tabula-rasa) trainiert wird, startet die Policy mit einer zufälligen Gewichtsinitialisierung. 
-Um den Zustands- und Aktionsraum zu erfassen, führt der Agent in der frühen Trainingsphase ungerichtete, hochgradig stochastische Aktionen aus. 
+Wie bereits in Abschnitt \ref{sec:problemstellung} beschrieben, wird die direkte Anwendung von \gls{DRL} im Bahnbetrieb durch Cold-Start und hohe Sample-Komplexität erschwert \cite[S.~1]{chap3_Wan23}. 
 
-Diese als Cold-Start bekannte Problematik wird durch die spezifische Physik eines Schienenfahrzeugs drastisch verschärft. 
-Die immense Massenträgheit führt zum Phänomen der extrem verzögerten Rückkopplung (Sparse Rewards). 
-Zieht der Agent im Zeitschritt $t$ virtuell den Bremshebel, registriert das System erst dutzende Sekunden später eine physikalisch signifikante Verzögerung, während ein positives Belohnungssignal für eine gelungene Zielbremsung erst am Ende der Trajektorie im Bahnhof generiert wird. 
-Dem Agenten fehlt jegliches Vorwissen über die fundamentalen physikalischen Gesetze der Kausalität. 
-Infolgedessen benötigt er Millionen von Simulationsepisoden, um initiale Zusammenhänge zu erlernen. 
-,,Online-Reinforcement-Learning (RL) steht oft vor der gewaltigen Herausforderung einer hohen Sample-Komplexität und intensiver Rechenkosten, was seine Anwendbarkeit bei realen Aufgaben behindert'' \cite[S.~1]{chap3_Wan23}. 
+Die Literatur verweist in diesem Zusammenhang zudem auf die Sicherheitsproblematik der Trial-and-Error-Exploration in realen Betriebsumgebungen \cite[S.~2]{chap3_Lyu26}. 
 
-Dieses Verhalten schließt eine Echtzeitanwendung an physischen Zügen kategorisch aus: ,,Die Trial-and-Error-Exploration des RL ist in realen Betriebsumgebungen, in denen eine Verletzung der Sicherheitsgrenzen inakzeptabel ist, unsicher und undurchführbar'' \cite[S.~2]{chap3_Lyu26}. 
-Die Konvergenz leidet massiv unter der fehlenden Kausalitätszuordnung. 
+Darüber hinaus wird die begrenzte Nutzung von Vorwissen als zentraler Engpass beschrieben. 
 ,,RL-Agenten haben Schwierigkeiten, die Übergangsdynamik von Umgebungen so intuitiv wie Menschen zu verstehen, und tun sich schwer damit, Vorwissen effektiv anzuwenden'' \cite[S.~1]{chap1_Wexler22}. 
-Es entsteht ein hochgradig ineffizienter Lernprozess, bei dem die Algorithmen wertvolle Daten ignorieren: ,,Da Reinforcement Learning (RL) auf zunehmend komplexere Domänen angewendet wird... scheitern RL- und Imitation-Learning (IL)-Ansätze daran, die Fülle an Expertenwissen, das für viele Domänen bereits existiert, schnell zu erfassen'' \cite[S.~5042]{chap1_Silva19}.
- Genau dieses fehlende Vorwissen in Form menschlicher Expertisen macht das Behavior Cloning als obligatorischen Initialisierungsschritt unausweichlich, um den Suchraum präzise einzugrenzen und das fatale Cold-Start-Problem zu umgehen.
+Die Literatur beschreibt diesen Engpass als zentralen Grund dafür, dass RL- und IL-Ansätze vorhandenes Expertenwissen in komplexen Domänen nur unzureichend ausnutzen \cite[S.~5042]{chap1_Silva19}. 
+Für die weitere Argumentation wird daher auf den in Abschnitt \ref{sec:problemstellung} eingeführten Warm-Start verwiesen.
 
  \subsection{Imitation Learning im Verkehrswesen}
 \label{sec:imitation_learning}
 
-Um die in Unterkapitel \ref{subsec:konventionell_und_rl} beschriebene Sample-Ineffizienz von reinem \gls{RL} zu überwinden, bedient sich die angewandte Forschung zunehmend des \gls{IL}. 
+Um die in Unterkapitel \ref{sec:konventionell_und_rl} beschriebene Sample-Ineffizienz von reinem \gls{RL} zu überwinden, bedient sich die angewandte Forschung zunehmend des \gls{IL}. 
 Anstatt einen Agenten isoliert durch Trial-and-Error lernen zu lassen, wird das implizite Systemwissen menschlicher Experten algorithmisch extrahiert und als fundamentale Ausgangsbasis genutzt.
 
 \subsubsection{Imitation Learning in der Verkehrsautomatisierung}
@@ -92,23 +83,20 @@ Die Forschung adaptiert daher zunehmend \gls{ML}-Verfahren, um diese menschliche
 
 \subsubsection{Expertendaten als Fundament}
 
-Die Literatur dokumentiert eine fundamentale Schwäche reiner Erkundungsansätze: 
-,,Da Reinforcement Learning (RL) auf zunehmend komplexere Domänen angewendet wird... scheitern RL- und Imitation-Learning (IL)-Ansätze daran, die Fülle an Expertenwissen, das für viele Domänen bereits existiert, schnell zu erfassen'' \cite[S.~1f]{chap1_Silva19}. 
+Wie bereits in Abschnitt \ref{sec:problemstellung} beschrieben, nutzen reine \gls{RL}-Ansätze vorhandenes Expertenwissen ohne geeigneten Warm-Start nur unzureichend \cite[vgl.~S.~5042]{chap1_Silva19}. 
 
-Um diesen gewaltigen Suchraum einzugrenzen, werden Datensätze menschlicher Expertendemonstrationen (Expert Demonstrations) genutzt. 
+Vor diesem Hintergrund werden Datensätze menschlicher Expertendemonstrationen (Expert Demonstrations) genutzt. 
 Diese bestehen aus zeitlichen Trajektorien $\tau = \{(s_1, a_1), \dots, (s_T, a_T)\}$, bei denen zu jedem Zeitschritt ein physikalischer Zustand $s_t$ (z. B. Geschwindigkeit, Steigung) einer konkreten Expertenaktion $a_t$ (z. B. Hebelstellung) zugeordnet ist. 
-Anstatt den RL-Agenten mit zufällig initialisierten Gewichten (Tabula Rasa) starten zu lassen, nutzt die moderne Forschung diese Trajektorien für einen sogenannten Warm-Start. 
-,,Um dies abzuschwächen, kann Behavior Cloning (BC) als Vortrainingsphase vor dem RL-Finetuning eingeführt werden, wobei das Policy-Netzwerk auf überwachte Weise trainiert wird, um Expertentrajektorien zu imitieren'' \cite[S.~2]{chap3_Lyu26}.
+Entsprechend nutzen aktuelle Ansätze diese Trajektorien für einen Warm-Start des Modells \cite[S.~2]{chap3_Lyu26}.
 
-Dieser zweistufige Prozess wird mathematisch als WSRL (Warm-Start Reinforcement Learning) bezeichnet: ,,Ein weiterer Ansatz ist Warm-Start RL (WSRL), bei dem das Lernen aus der Initialisierung des Agenten mit einer vortrainierten Verhaltens-Policy und der Verbesserung seiner bereits erreichten moderaten Leistung durch RL besteht'' \cite[S.~1]{chap1_Wexler22}. 
+Dieser zweistufige Prozess wird in der Forschung als Warm-Start Reinforcement Learning (WSRL) formalisiert \cite[vgl.~S.~1]{chap1_Wexler22}. 
 Die initiale Policy $\pi_\theta^{BC}$ sichert dem System eine solide Grundkompetenz, welche die für das RL typische Sample-Ineffizienz und das Risiko von sicherheitskritischen Aktionen während der initialen Explorationsphase drastisch reduziert.
 
 \subsubsection{Umgang mit Covariate Shift in der Forschung}
 
 Trotz des methodischen Vorteils der Datenverwertung kämpft das Offline-Imitationslernen mit einem fundamentalen mathematischen Problem. 
-Wie bereits in Kapitel \ref{sec:theoretische_grundlagen} dargelegt, kumulieren sich kleine Abweichungen des trainierten Modells im geschlossenen Regelkreis (Closed-Loop) quadratisch. 
-Die aktuelle Literatur benennt dieses Phänomen als primäre Fehlerquelle: 
-,,Behavioral Cloning (BC) ist ein einfacher, aber effektiver Ansatz für Offline-IL, aber es ist auch weithin dafür bekannt, anfällig für den Covariate Shift zu sein, der aus der Diskrepanz zwischen den durch die gelernte Policy und die Experten-Policy induzierten Zustandsverteilungen resultiert'' \cite[S.~1]{chap3_Seo24}.
+Wie bereits in Kapitel \ref{sec:covariate_shift} dargelegt, kumulieren sich kleine Abweichungen des trainierten Modells im geschlossenen Regelkreis (Closed-Loop) quadratisch. 
+Die aktuelle Literatur benennt dieses Phänomen als primäre Fehlerquelle \cite[vgl.~S.~1]{chap3_Seo24}. 
 
 Um diesen Distribution Shift zu korrigieren, setzt die Wissenschaft in Simulationen häufig auf interaktive Algorithmen wie Dataset Aggregation (DAgger). 
 ,,Interaktive IL-Algorithmen wie DAgger... nutzen eine Reduktion auf No-Regret-Online-Learning und demonstrieren, dass sie unter bestimmten Bedingungen erfolgreich eine Policy erlernen können, die den Experten imitiert'' \cite[S.~1]{chap3_Cha21}. 
@@ -122,16 +110,13 @@ Dies zwingt das Modellierungsverfahren, ausschließlich auf Basis statischer, hi
 \subsubsection{Offline Behavior Cloning}
 
 Der Übergang von kontrollierten Simulationsumgebungen hin zu historischen Sensordaten in der Verkehrsautomatisierung deckt weitere erhebliche Defizite auf. 
-Im realen täglichen Eisenbahnbetrieb sind die verfügbaren Fahrtenschreiber- und Sensoraufzeichnungen jedoch hochgradig verrauscht, lückenhaft und von menschlichen Unzulänglichkeiten geprägt. 
+Aufgrund der zuvor beschriebenen Sensorlücken und des Rauschens in den Betriebsdaten wird die Datenbasis im realen Fahrbetrieb deutlich unzuverlässiger. 
 Zudem spiegeln die Daten die menschlichen Schwächen wider: 
-,,Beim traditionellen manuellen Fahrmodus ist der Fahrer anfällig für Ermüdung, was die Fahreffizienz des Zuges verringert'' \cite[S.~3]{chap3_Yan21}. 
+,,Beim traditionellen manuellen Fahrmodus ist der Fahrer anfällig für Ermüdung, was die Fahreffizienz des Zuges verringert'' \cite[S.~1]{chap3_Liu19}. 
 
 Diese Datenqualität torpediert herkömmliche Regressionsmodelle. 
-,,Wenn die Expertendaten begrenzt sind, macht der Covariate Shift zwischen Expertenbeobachtungen und der tatsächlichen Verteilung, auf die der Agent trifft, Imitationslernmethoden sowohl in der Theorie als auch in der Praxis ineffektiv'' \cite[S.~2]{chap3_Sha24}. 
-
-Um der daraus resultierenden Modell-Degradation zu begegnen, ist eine technologische Anpassung der Netzwerkarchitekturen essenziell. 
-Die Forschung reagiert auf das hochdynamische, verzögerte physikalische System des Schienenverkehrs (Lag) mit dem Einsatz expliziter Zeitreihenarchitekturen: 
-,,Rekurrente Strukturen, wie Long Short-Term Memory (LSTM) Netzwerke oder Gated Recurrent Units (GRUs), ermöglichen es der Policy, sich an vergangene Dynamiken zu erinnern, wie etwa vorhergehende Beschleunigungen, Widerstände oder Bremsintensitäten, die aktuelle Steuerungsentscheidungen beeinflussen'' \cite[S.~2]{chap3_Lyu26}.
+Um der daraus resultierenden Modell-Degradation zu begegnen, setzt die Forschung vor allem auf interaktive Verfahren wie DAgger, die den Lernprozess online an die Expertenverteilung heranführen. 
+Entsprechend kommen in der Literatur rekurrente Architekturen wie Long Short-Term Memory (LSTM) Netzwerke und Gated Recurrent Units (GRUs) zum Einsatz \cite[S.~2]{chap3_Lyu26}.
 
 Darüber hinaus gilt in der Literatur der Konsens, dass Modelle strikt daran gehindert werden müssen, die verrauschten Eigenschaften der Trainingsstrecke schlichtweg auswendig zu lernen. 
 Um der Leistungsdegradation (Degradation in Warm-Start RL) und dem Overfitting bei verrauschten Daten entgegenzuwirken, müssen Updates der Policy durch Konfidenzmaße oder Abstandsmetriken an die Expertenverteilung stark regularisiert bzw. eingeschränkt (Constrained Learning) werden \cite[vgl.~S.~1f~u.~S.~6]{chap1_Wexler22}. 
@@ -147,7 +132,7 @@ Etablierte Imitation-Learning-Ansätze können diesen Kaltstart zwar theoretisch
 
 Genau an diesem Schnittpunkt manifestiert sich die zentrale Forschungslücke: 
 Es mangelt an fundierten Konzepten, die das Kaltstartproblem zukünftiger RL-Agenten ausschließlich durch Offline Behavior Cloning auf Basis realer, historischer Betriebsdaten lösen. 
-Reale Sensordaten aus dem Schienennetz bilden einen starken Kontrast zu synthetischen Simulatoren. Sie sind extrem verrauscht, weisen Sensorlücken auf und unterliegen einer starken Varianz durch die inkonsistente Tagesform menschlicher Triebfahrzeugführer. 
+Reale Sensordaten aus dem Schienennetz bilden einen starken Kontrast zu synthetischen Simulatoren. Zusätzlich zu diesen technischen Unzulänglichkeiten unterliegen die historischen Aufzeichnungen einer starken Varianz durch die inkonsistente Tagesform menschlicher Triebfahrzeugführer.
 Die informationstechnische Herausforderung, das sogenannte "Missing Link", besteht darin, aus diesem unperfekten, rein statischen Offline-Datensatz eine generalisierbare Policy $\pi_\theta$ zu extrahieren, ohne in das fatale Overfitting abzurutschen.
 
 Die vorliegende Bachelorarbeit positioniert sich exakt in dieser Lücke. 

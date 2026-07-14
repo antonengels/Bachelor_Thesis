@@ -80,6 +80,7 @@ Das zu trainierende neuronale Netz repräsentiert dabei die Fahrstrategie.
 Das primäre Ziel während des Trainings ist es, eine Policy $\pi_\theta$ zu finden, die den Trainingsfehler (Surrogate Loss) unter der vom Experten induzierten Zustandsverteilung minimiert, sodass die vom Modell generierten Aktionen denen des menschlichen Fahrers bestmöglich entsprechen \cite[vgl.~S.~2f]{chap2_Ros10}.
 
 \subsubsection{Covariate Shift und Compounding Errors}
+\label{sec:covariate_shift}
 
 Obwohl sich \gls{BC} mathematisch als \gls{SL} formulieren lässt, birgt die Anwendung auf sequentielle Entscheidungsprozesse wie die Zugsteuerung ein fundamentales Problem. 
 Klassische statistische Lernansätze basieren auf der Annahme, dass die Trainings- und Testdaten unabhängig und identisch verteilt sind (i.i.d.-Annahme). 
@@ -94,7 +95,7 @@ Diese Diskrepanz zwischen Trainings- und Inferenzzeit führt zum zentralen Probl
 
 Diese Fehlerakkumulation wächst über die Zeit nicht linear, sondern quadratisch an. 
 „Insbesondere kann ein Klassifikator, der unter der Verteilung der vom Experten angetroffenen Zustände/Beobachtungen mit Wahrscheinlichkeit $\epsilon$ einen Fehler macht, unter der Verteilung der Zustände, die der Klassifikator selbst induziert, im Erwartungswert über $T$ Schritte bis zu $T^2\epsilon$ Fehler machen“ \cite[S.~1]{chap2_Ros10}. 
-„Intuitiv liegt das daran, dass der Lernende, sobald er einen Fehler macht, auf völlig andere Beobachtungen stoßen kann als bei der Expertendemonstration, was zu einer Fehlerakkumulation führt“ \cite[S.~1]{chap2_Ros10}. F
+„Intuitiv liegt das daran, dass der Lernende, sobald er einen Fehler macht, auf völlig andere Beobachtungen stoßen kann als bei der Expertendemonstration, was zu einer Fehlerakkumulation führt“ \cite[S.~1]{chap2_Ros10}.
 
 Wenn das Modell folglich durch eigene kleine Fehlentscheidungen in unbekannte Zustände gerät, auf die es nie trainiert wurde, ist es in der Regel nicht mehr in der Lage, sich von diesen Fehlern zu erholen (Recovery), was unweigerlich zum Versagen des Systems führt \cite[vgl.~S.~16ff]{chap2_Are20}. 
 Um dem Covariate Shift entgegenzuwirken und die Generalisierungsfähigkeit zu gewährleisten, ist der Einsatz strikter Regularisierungstechniken unerlässlich.
@@ -122,7 +123,7 @@ Für die Modellierung von Fahrverhalten ist diese fundamentale Amnesie kritisch.
 Zwar punkten \gls{MLP} durch eine sehr einfache Architektur, schnelles Training und leichte Implementierbarkeit, jedoch fehlt ihnen jeglicher temporale Kontext. 
 Im Gegensatz zu rekurrenten Netzen kann ein \gls{MLP} die enorme Trägheit eines Zuges nicht erfassen. 
 Wenn der Bremshebel gezogen wird, vergehen Sekunden, bis der Bremszylinderdruck ausreichend steigt und eine Verzögerung eintritt. 
-Ein \gls{MLP} sieht im Zeitschritt $t$ lediglich die aktuelle Geschwindigkeit, ohne das Wissen, welche Aktionen im Zeitschritt $t-1$ stattgefunden haben. 
+Ein \gls{MLP} besitzt keinen inhärenten Zustandsspeicher über die Zeit. Zwar kann in der Praxis ein Sliding-Window aus mehreren vergangenen Zeitschritten als flacher Eingabevektor übergeben werden, der zeitliche Kontext muss dabei jedoch explizit in den Features kodiert werden und wird nicht intern rekurrent über längere Horizonte fortgeschrieben. 
 Beim \gls{BC} führt dieses fehlende Verständnis für zeitliche Kausalitäten unweigerlich zu einem unruhigen, zitternden Fahrverhalten, dem sogenannten Chattering.
 
 \begin{figure}[htbp]
@@ -168,7 +169,7 @@ Das Forget Gate verwirft irrelevante Informationen der Vergangenheit, das Input 
 „Sie behalten den bestehenden Hidden State bei und fügen ihm neue Inhalte hinzu. 
 Dadurch können die Fehlergradienten den Backpropagation-Prozess durchlaufen, ohne zu schnell zu verschwinden oder zu explodieren“ \cite[S.~4]{chap2_Ife23}. 
 Durch diesen additiven Mechanismus löst das \gls{LSTM} das Vanishing-Gradient-Problem. 
-Im direkten Vergleich zum Standard-\gls{RNN} ist das \gls{RNN} bei komplexen Fahrprofilen deutlich überlegen, da es sehr langfristige Abhängigkeiten - wie weite Signaldistanzen in Kombination mit langsamer Zugphysik - verlustfrei erlernen kann. 
+Im direkten Vergleich zum Standard-\gls{RNN} ist das \gls{LSTM} bei komplexen Fahrprofilen deutlich überlegen, da es sehr langfristige Abhängigkeiten - wie weite Signaldistanzen in Kombination mit langsamer Zugphysik - verlustfrei erlernen kann. 
 Der signifikante Nachteil liegt in der Rechenintensität: Die Architektur ist durch die vielen Gates äußerst parameterstark, was das Risiko von Overfitting bei kleineren Datensätzen massiv erhöht.
 
 \begin{figure}[htbp]
