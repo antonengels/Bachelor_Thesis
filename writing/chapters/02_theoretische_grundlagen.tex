@@ -2,14 +2,14 @@
 
 \subsection{Grundlagen des Supervised Learning}
 
-Beim \gls{SL} trainiert ein Algorithmus anhand eines Datensatzes, der sowohl die Eingangsmerkmale (Features) als auch die durch einen Supervisor vorgegebenen, korrekten Zielwerte (Labels) enthält \cite[vgl.~S.~104f]{chap2_Goo16}. 
+Beim \gls{SL} trainiert ein Algorithmus anhand eines Datensatzes, der sowohl die Eingangsmerkmale (Features) als auch die durch einen Supervisor vorgegebenen, korrekten Zielwerte (Labels) enthält \cite[vgl.~S.~104f.]{chap2_Goo16}. 
 Das primäre Ziel dieses Paradigmas ist es, eine mathematische Zuordnung von Inputs zu Outputs zu erlernen, um in der Folge für neue, ungesehene Daten präzise Vorhersagen treffen zu können \cite[vgl.~S.~3]{chap2_Mur12}.
 
 \subsubsection{Mathematische Formalisierung und Problemklassifikation}
 
 Formell lässt sich ein Datensatz für das \gls{SL} als $\mathcal{D} = \{(x_i, y_i)\}_{i=1}^N$ definieren. 
 Hierbei repräsentiert $x_i \in \mathbb{R}^d$ den $d$-dimensionalen Eingangsvektor (Feature-Vektor) und $y_i$ den entsprechenden korrekten Zielwert. 
-Das fundamentale Ziel ist es, ein durch den Parametervektor $\theta$ (Gewichte und Biases) charakterisiertes Modell $f_\theta$ so zu trainieren, dass die Vorhersage $\hat{y}_i = f_\theta(x_i)$ den tatsächlichen Werten $y_i$ möglichst nahekommt \cite[vgl.~S.~8f]{chap2_Ter25}.
+Das fundamentale Ziel ist es, ein durch den Parametervektor $\theta$ (Gewichte und Biases) charakterisiertes Modell $f_\theta$ so zu trainieren, dass die Vorhersage $\hat{y}_i = f_\theta(x_i)$ den tatsächlichen Werten $y_i$ möglichst nahekommt \cite[vgl.~S.~8f.]{chap2_Ter25}.
 
 Da die in dieser Arbeit vorherzusagenden Zielvariablen -- spezifisch die Hebelstellungen für Leistung und Bremse -- kontinuierliche Werte annehmen, wird das Problem mathematisch der Regression zugeordnet. 
 Dies grenzt sich deutlich von der Klassifikation ab, bei der das Modell diskrete oder kategoriale Klassenlabels prädiziert \cite[vgl.~S.~3]{chap2_Bis06}.
@@ -18,7 +18,7 @@ Dies grenzt sich deutlich von der Klassifikation ab, bei der das Modell diskrete
 
 Um objektiv zu bewerten, wie stark die Prädiktionen des Modells von der Ground Truth abweichen, wird eine Verlustfunktion (Loss Function) $\mathcal{L}$ herangezogen. 
 Da die wahre Verteilung der Daten in der Praxis meist unbekannt ist, approximiert das Modell das optimale Risiko, indem es den Fehler auf dem vorliegenden empirischen Trainingsdatensatz minimiert. 
-Dieser Trainingsprozess wird als \gls{ERM} bezeichnet \cite[vgl.~S.~274-275]{chap2_Goo16}.
+Dieser Trainingsprozess wird als \gls{ERM} bezeichnet \cite[vgl.~S.~274f.]{chap2_Goo16}.
 
 Für Regressionsprobleme ist der \gls{MSE} die gängigste Metrik. 
 Er berechnet sich aus dem Durchschnitt der quadrierten Differenzen zwischen den prädizierten und den wahren Werten, wie in Gleichung (\ref{eq:mse}) dargestellt:
@@ -31,7 +31,7 @@ Ein wissenschaftlich kritischer Aspekt des in Gleichung (\ref{eq:mse}) definiert
 Durch die Quadrierung der Fehler erhalten große Abweichungen einen überproportional hohen Einfluss auf den berechneten Loss \cite[vgl.~S.~8]{chap2_Ter25}. 
 Für reale, teils verrauschte Sensordaten im Schienenverkehr erweist sich dies oft als problematisch. 
 Eine fundierte Alternative bieten robuste Verlustfunktionen wie der Huber-Loss. 
-Diese steigen bei großen Fehlern nur noch linear an, wodurch die Parameter-Updates vor extremen Ausreißern geschützt werden, während sie für kleine Abweichungen die vorteilhaften, glatten Optimierungseigenschaften des \gls{MSE} beibehalten \cite[vgl.~S.~11f]{chap2_Ter25}, \cite[vgl.~S.~349-350]{chap2_Has09}.
+Diese steigen bei großen Fehlern nur noch linear an, wodurch die Parameter-Updates vor extremen Ausreißern geschützt werden, während sie für kleine Abweichungen die vorteilhaften, glatten Optimierungseigenschaften des \gls{MSE} beibehalten \cite[vgl.~S.~11f.]{chap2_Ter25}, \cite[vgl.~S.~349f.]{chap2_Has09}.
 
 \subsubsection{Optimierungsalgorithmen und Gradientenabstieg}
 
@@ -46,24 +46,24 @@ Die fundamentale Update-Regel ist in Gleichung (\ref{eq:gradient_descent}) defin
 
 Der Hyperparameter $\eta > 0$ in Gleichung (\ref{eq:gradient_descent}) bezeichnet dabei die \gls{LR}, welche die Schrittweite der Parameteranpassung bestimmt. 
 Um den Gradienten $\nabla_\theta \mathcal{L}(\theta)$ in tiefen neuronalen Netzen für jedes einzelne Gewicht effizient berechnen zu können, wird der Backpropagation-Algorithmus genutzt. 
-Dieser wendet die mathematische Kettenregel an, um den Fehler von der Ausgabeschicht rückwärts durch die verborgenen Schichten des gesamten Netzes zu propagieren \cite[vgl.~S.~204f]{chap2_Goo16}.
+Dieser wendet die mathematische Kettenregel an, um den Fehler von der Ausgabeschicht rückwärts durch die verborgenen Schichten des gesamten Netzes zu propagieren \cite[vgl.~S.~204f.]{chap2_Goo16}.
 
 In der Praxis wird der Gradientenabstieg selten über den gesamten Datensatz gleichzeitig berechnet. 
 Stattdessen nutzt der \gls{SGD} kleine, zufällig gewählte Teilmengen, sogenannte Mini-Batches, was den Lernprozess massiv beschleunigt \cite[vgl.~S.~277]{chap2_Goo16}. 
 In modernen Deep-Learning-Anwendungen hat sich zudem der \gls{Adam}-Optimizer als Standard etabliert. 
-\gls{Adam} erweitert den klassischen \gls{SGD}, indem er dynamische, parameterspezifische Lernraten mit einem Trägheitsterm (Momentum) kombiniert, was zu einer schnelleren und deutlich robusteren Konvergenz während des Trainings führt \cite[vgl.~S.~307-308]{chap2_Goo16}.
+\gls{Adam} erweitert den klassischen \gls{SGD}, indem er dynamische, parameterspezifische Lernraten mit einem Trägheitsterm (Momentum) kombiniert, was zu einer schnelleren und deutlich robusteren Konvergenz während des Trainings führt \cite[vgl.~S.~307f.]{chap2_Goo16}.
 
 \subsection{Behavior Cloning}
 
 Aufbauend auf den Prinzipien des \gls{SL} lässt sich das Erlernen von optimalen Steuerungsstrategien auf ein klassisches Regressionsproblem reduzieren. 
-In diesem Kontext fungiert das Modell als Schüler, da es schlichtweg darauf trainiert wird, eine Policy zu erlernen, die das Verhalten eines Experten unter der Verteilung der Trainingsdaten nachahmt und dessen Aktionen vorhersagt \cite[vgl.~S.~2f]{chap2_Ros10}. 
+In diesem Kontext fungiert das Modell als Schüler, da es darauf trainiert wird, eine Policy zu erlernen, die das Verhalten eines Experten unter der Verteilung der Trainingsdaten nachahmt und dessen Aktionen vorhersagt \cite[vgl.~S.~2f.]{chap2_Ros10}.
 Folglich ist „\gls{BC} [...] eine Form des \gls{SL}, die sensomotorische Policies aus offline gesammelten Daten erlernen kann. 
 Die einzigen Voraussetzungen sind Paare von sensorischen Eingangsbeobachtungen, die mit Expertenaktionen verknüpft sind“ \cite[S.~9330]{chap2_Cod19}. 
 
 In der modernen Forschung zur Automatisierung hat sich dieser Ansatz fest etabliert: 
-„Das vorherrschende Paradigma ist das \gls{IL}, am häufigsten in Form von \gls{BC}, welches das Erlernen von Policies als eine überwachte Vorhersageaufgabe unter Verwendung menschlicher Fahr-Demonstrationen formuliert“ \cite[S.~1f]{chap2_Kar25}. 
+Das vorherrschende Paradigma ist das \gls{IL}, meist in Form von \gls{BC}, das das Erlernen von Policies als überwachte Vorhersageaufgabe unter Verwendung menschlicher Fahr-Demonstrationen formuliert \cite[vgl.~S.~1f.]{chap2_Kar25}.
 Dabei wird die grundlegende Methodik des \gls{SL} direkt übernommen: 
-„Ein typischer Ansatz für das \gls{IL} besteht darin, einen [...] Regressor zu trainieren, um das Verhalten eines Experten vorherzusagen, gegeben Trainingsdaten der angetroffenen Beobachtungen (Eingabe) und der vom Experten ausgeführten Aktionen (Ausgabe)“ \cite[S.~1f]{chap2_Ros10}.
+Ein typischer Ansatz für das \gls{IL} besteht darin, einen Regressor zu trainieren, um das Verhalten eines Experten vorherzusagen, gegeben Trainingsdaten der angetroffenen Beobachtungen (Eingabe) und der vom Experten ausgeführten Aktionen (Ausgabe) \cite[vgl.~S.~1f.]{chap2_Ros10}.
 
 \subsubsection{Mathematische Formulierung}
 
@@ -76,28 +76,26 @@ Die historischen Fahrdaten des Experten werden als zeitliche Sequenzen erfasst.
 Analog zu den Eingangsvektoren $x_i$ und Zielwerten $y_i$ aus Kapitel 2.1 entsprechen die Zustände $s_t$ (bzw. Beobachtungen $o_t$) den Eingangsmerkmalen und die Aktionen $a_t$ den Zielwerten. 
 
 Das zu trainierende neuronale Netz repräsentiert dabei die Fahrstrategie. 
-„Eine End-to-End-Policy wird dargestellt als $a_t \sim \pi_\theta(a \mid o_t)$, wobei $\theta$ die gelernten Parameter, $o_t$ die Eingangsbeobachtung und $a_t$ eine abstrakte Ausgabeaktion bezeichnet“ \cite[S.~2]{chap2_Kar25}. 
-Das primäre Ziel während des Trainings ist es, eine Policy $\pi_\theta$ zu finden, die den Trainingsfehler (Surrogate Loss) unter der vom Experten induzierten Zustandsverteilung minimiert, sodass die vom Modell generierten Aktionen denen des menschlichen Fahrers bestmöglich entsprechen \cite[vgl.~S.~2f]{chap2_Ros10}.
+„Eine End-to-End-Policy wird dargestellt als $a_t \sim \pi_\theta(a \mid o_t)$, wobei $\theta$ die gelernten Parameter, $o_t$ die Eingangsbeobachtung und $a_t$ eine abstrakte Ausgabeaktion bezeichnet“ \cite[S.~2]{chap2_Kar25}.
+Das primäre Ziel während des Trainings ist es, eine Policy $\pi_\theta$ zu finden, die den Trainingsfehler (Surrogate Loss) unter der vom Experten induzierten Zustandsverteilung minimiert, sodass die vom Modell generierten Aktionen denen des menschlichen Fahrers bestmöglich entsprechen \cite[vgl.~S.~2f.]{chap2_Ros10}.
 
 \subsubsection{Covariate Shift und Compounding Errors}
 \label{sec:covariate_shift}
 
 Obwohl sich \gls{BC} mathematisch als \gls{SL} formulieren lässt, birgt die Anwendung auf sequentielle Entscheidungsprozesse wie die Zugsteuerung ein fundamentales Problem. 
 Klassische statistische Lernansätze basieren auf der Annahme, dass die Trainings- und Testdaten unabhängig und identisch verteilt sind (i.i.d.-Annahme). 
-Beim \gls{BC} wird diese Annahme jedoch systematisch gebrochen: „[...] da die Vorhersage des Lernenden zukünftige Eingangsbeobachtungen/Zustände während der Ausführung der gelernten Policy beeinflusst, verletzt dies die entscheidende i.i.d.-Annahme, die von den meisten statistischen Lernansätzen getroffen wird“ \cite[S.~1]{chap2_Ros10}.
+Beim \gls{BC} wird diese Annahme jedoch systematisch gebrochen, da die Vorhersage des Lernenden zukünftige Eingangsbeobachtungen/Zustände während der Ausführung der gelernten Policy beeinflusst und damit die entscheidende i.i.d.-Annahme verletzt \cite[vgl.~S.~1]{chap2_Ros10}.
 
 In der Trainingsphase optimiert das Modell seine Parameter lediglich auf Basis der vorgegebenen Expertentrajektorien. 
-„Während des Einsatzes agieren Policies jedoch sequenziell im geschlossenen Regelkreis (Closed-Loop), wobei jede Entscheidung zukünftige Beobachtungen beeinflusst, sodass die IID-Annahme nicht mehr gilt“ \cite[S.~3]{chap2_Kar25}. 
+Während des Einsatzes agieren Policies jedoch sequenziell im geschlossenen Regelkreis (Closed-Loop), wobei jede Entscheidung zukünftige Beobachtungen beeinflusst und die IID-Annahme damit nicht mehr gilt \cite[vgl.~S.~3]{chap2_Kar25}.
 Diese Diskrepanz zwischen Trainings- und Inferenzzeit führt zum zentralen Problem des Behavior Cloning: 
 
-„Covariate Shift (auch Distribution Shift genannt), wohl das wichtigste Problem, tritt auf, wenn die Zustandsverteilung, auf die die eingesetzte Policy trifft, von der in den Trainingsdaten abweicht. 
-[...] Da die Policy im Closed-Loop ausgeführt wird, verstärken sich kleine Abweichungen vom Experten im Laufe der Zeit (Compounding Errors) und drängen die Policy in immer unbekanntere Regionen des Zustandsraums [...] bis sie sich nicht mehr erholen kann“ \cite[S.~3]{chap2_Kar25}.
+Covariate Shift (auch Distribution Shift genannt) tritt auf, wenn die Zustandsverteilung, auf die die eingesetzte Policy trifft, von der in den Trainingsdaten abweicht; im Closed-Loop verstärken sich kleine Abweichungen vom Experten im Laufe der Zeit und drängen die Policy in immer unbekanntere Regionen des Zustandsraums, bis sie sich nicht mehr erholen kann \cite[vgl.~S.~3]{chap2_Kar25}.
 
 Diese Fehlerakkumulation wächst über die Zeit nicht linear, sondern quadratisch an. 
-„Insbesondere kann ein Klassifikator, der unter der Verteilung der vom Experten angetroffenen Zustände/Beobachtungen mit Wahrscheinlichkeit $\epsilon$ einen Fehler macht, unter der Verteilung der Zustände, die der Klassifikator selbst induziert, im Erwartungswert über $T$ Schritte bis zu $T^2\epsilon$ Fehler machen“ \cite[S.~1]{chap2_Ros10}. 
-„Intuitiv liegt das daran, dass der Lernende, sobald er einen Fehler macht, auf völlig andere Beobachtungen stoßen kann als bei der Expertendemonstration, was zu einer Fehlerakkumulation führt“ \cite[S.~1]{chap2_Ros10}.
+Insbesondere kann ein Klassifikator unter der vom Experten geprägten Zustandsverteilung mit Wahrscheinlichkeit $\epsilon$ einen Fehler machen und unter der von ihm selbst induzierten Verteilung über $T$ Schritte bis zu $T^2\epsilon$ Fehler akkumulieren; das liegt daran, dass der Lernende nach einem Fehler auf andere Beobachtungen trifft als bei der Expertendemonstration \cite[vgl.~S.~1]{chap2_Ros10}.
 
-Wenn das Modell folglich durch eigene kleine Fehlentscheidungen in unbekannte Zustände gerät, auf die es nie trainiert wurde, ist es in der Regel nicht mehr in der Lage, sich von diesen Fehlern zu erholen (Recovery), was unweigerlich zum Versagen des Systems führt \cite[vgl.~S.~16ff]{chap2_Are20}. 
+Wenn das Modell folglich durch eigene kleine Fehlentscheidungen in unbekannte Zustände gerät, auf die es nie trainiert wurde, ist es in der Regel nicht mehr in der Lage, sich von diesen Fehlern zu erholen (Recovery), was unweigerlich zum Versagen des Systems führt \cite[vgl.~S.~16ff.]{chap2_Are20}. 
 Um dem Covariate Shift entgegenzuwirken und die Generalisierungsfähigkeit zu gewährleisten, ist der Einsatz strikter Regularisierungstechniken unerlässlich.
 
 \subsection{Geeignete Modellarchitekturen}
@@ -111,13 +109,11 @@ Die finale Auswahl der Architektur für diese Arbeit erfolgt jedoch nicht an die
 
 Die einfachste Form künstlicher neuronaler Netze stellen \gls{MLP} dar, welche zur Klasse der klassischen Feedforward-Netzwerke gehören (siehe Abbildung \ref{fig:mlp}). 
 In dieser Architektur wird der Input $x_t$ über Gewichte direkt und ohne Umwege auf den Output prädiziert. 
-„Diese Modelle werden als Feedforward bezeichnet, da die Informationen durch die auszuwertende Funktion von x über die Zwischenberechnungen zur Definition von f und schließlich zur Ausgabe y fließen. 
-Es gibt keine Feedback-Verbindungen, bei denen Ausgaben des Modells wieder in das Modell selbst zurückgespeist werden“ \cite[S.~168]{chap2_Goo16}. 
+Diese Modelle werden als Feedforward bezeichnet, da die Informationen durch die auszuwertende Funktion von x über die Zwischenberechnungen zur Definition von f und schließlich zur Ausgabe y fließen; Feedback-Verbindungen gibt es dabei nicht \cite[vgl.~S.~168]{chap2_Goo16}. 
 
 Feedforward-Netzwerke verarbeiten Eingabedaten streng direktional. 
 Da sie folglich keinen internen Zustand oder ein Gedächtnis aufbauen können, mappen sie Eingaben lediglich statisch auf Ausgaben. 
-„MLP kann nicht aus Sequenzinformationen von Daten lernen. 
-Einfach ausgedrückt: Es verliert seine Sequenzinformationen, daher geht der Kontext verloren“ \cite[S.~3]{chap2_Ife23}.
+MLP können nicht aus Sequenzinformationen von Daten lernen; der Kontext geht dabei verloren \cite[vgl.~S.~3]{chap2_Ife23}.
 
 Für die Modellierung von Fahrverhalten ist diese fundamentale Amnesie kritisch. 
 Zwar punkten \gls{MLP} durch eine sehr einfache Architektur, schnelles Training und leichte Implementierbarkeit, jedoch fehlt ihnen jeglicher temporale Kontext. 
@@ -185,12 +181,12 @@ Eine modernere und stromlinienförmige Alternative zum \gls{LSTM} stellen die \g
 Diese Architektur bietet eine recheneffizientere Variante, indem sie strukturelle Vereinfachungen vornimmt, ohne die Kernfunktionalität zu verlieren. 
 „Das \gls{GRU}-\gls{RNN} reduziert die Gating-Signale im Vergleich zum \gls{LSTM}-\gls{RNN}-Modell auf zwei. 
 Die beiden Gates werden Update-Gate und Reset-Gate genannt. 
-[...] Dies spart ein Gating-Signal und die dazugehörigen Parameter ein“ \cite[S.~2f]{chap2_Dey17}.
+[...] Dies spart ein Gating-Signal und die dazugehörigen Parameter ein“ \cite[S.~2f.]{chap2_Dey17}.
 
 Durch die Verschmelzung des Forget- und Input-Gates zu einem einzigen Update-Gate und den Verzicht auf einen separaten Zellzustand kommen \gls{GRU} mit signifikant weniger Parametern aus. 
 Dies bringt entscheidende praktische Vorteile mit sich: Das Netzwerk trainiert schneller, benötigt weniger Speicher und ist - was für diese Arbeit von strategischer Bedeutung ist - weniger anfällig für Overfitting. 
 
-Trotz der Reduktion der Parameterzahl weisen \gls{GRU} bei der Analyse sequenzieller Daten eine enorme Ausdruckskraft auf. „Es wurde festgestellt, dass das \gls{GRU}-\gls{RNN} in den meisten Fällen mit dem \gls{LSTM} vergleichbar ist oder dieses sogar übertrifft“ \cite[S.~2f]{chap2_Dey17}. 
+Trotz der Reduktion der Parameterzahl weisen \gls{GRU} bei der Analyse sequenzieller Daten eine enorme Ausdruckskraft auf. „Es wurde festgestellt, dass das \gls{GRU}-\gls{RNN} in den meisten Fällen mit dem \gls{LSTM} vergleichbar ist oder dieses sogar übertrifft“ \cite[S.~2f.]{chap2_Dey17}.
 Lediglich bei extrem komplexen, überlangen Sequenzen kann die Prädiktionsgüte minimal geringer ausfallen als beim vollen \gls{LSTM}. Ob das leichtgewichtigere \gls{GRU} oder das komplexere \gls{LSTM} für das Behavior Cloning der realen Zugdaten besser geeignet ist, muss eine empirische Evaluation der initialen Trainingsexperimente zeigen.
 
 \begin{figure}[htbp]
@@ -205,17 +201,17 @@ Lediglich bei extrem komplexen, überlangen Sequenzen kann die Prädiktionsgüte
 Die Auswahl einer leistungsstarken Architektur, die zeitliche Abhängigkeiten verarbeiten kann, ist eine notwendige, jedoch keine hinreichende Bedingung für ein erfolgreiches Behavior Cloning. 
 Da das Modell in dieser Arbeit ausschließlich offline auf einem statischen Datensatz historischer Betriebsdaten trainiert wird, besteht ein immenses Risiko der Überanpassung (Overfitting). 
 Ein Modell leidet unter Overfitting, wenn die Lücke zwischen dem Trainingsfehler und dem Testfehler zu groß wird. Dies geschieht, wenn ein Modell aufgrund einer zu hohen Modellkapazität die spezifischen Muster und das Rauschen der Trainingsdaten regelrecht auswendig lernt (Memorization), anstatt die zugrundeliegenden Gesetzmäßigkeiten zu abstrahieren. 
-„Modelle mit hoher Kapazität können überanpassen, indem sie Eigenschaften des Trainingsdatensatzes auswendig lernen, die ihnen auf dem Testdatensatz nicht zugutekommen“ \cite[S.~111]{chap2_Goo16}. 
+Modelle mit hoher Kapazität können überanpassen, indem sie Eigenschaften des Trainingsdatensatzes auswendig lernen, die ihnen auf dem Testdatensatz nicht zugutekommen \cite[vgl.~S.~111]{chap2_Goo16}.
 Im Kontext der Zugsteuerung könnte das Netzwerk dazu tendieren, die topologischen Eigenheiten der spezifischen Trainingsstrecken starr auswendig zu lernen, anstatt eine abstrakte, physikalische und übertragbare Fahrstrategie zu generalisieren. 
 Um eine robuste Policy $\pi_\theta$ zu gewährleisten, müssen präventive Initialisierungs- und Regularisierungsstrategien angewendet werden.
 
 \subsubsection{Weight Initialization}
 
 Der Grundstein für ein stabiles Training und eine erfolgreiche Generalisierung wird bereits vor dem ersten Parameter-Update durch die Initialisierung der Netzgewichte $\theta$ gelegt. 
-Die bewusste und mathematisch fundierte Skalierung dieser initialen Gewichte ist kritisch für den Erfolg beim Training tiefer neuronaler Netze \cite[vgl.][S.~301ff]{chap2_Goo16}. 
+Die bewusste und mathematisch fundierte Skalierung dieser initialen Gewichte ist kritisch für den Erfolg beim Training tiefer neuronaler Netze \cite[vgl.][S.~301ff.]{chap2_Goo16}. 
 
 Werden die initialen Gewichte zu groß gewählt, führt dies - insbesondere bei tiefen oder rekurrenten Netzen - zum Problem der explodierenden Gradienten. 
-„Zu große initiale Gewichte können jedoch zu explodierenden Werten während der Vorwärts- oder Rückwärtspropagation führen. [...] Große Gewichte können auch zu extremen Werten führen, die bewirken, dass die Aktivierungsfunktion saturiert, was zu einem vollständigen Verlust des Gradienten durch saturierte Einheiten führt“ \cite[S.~301]{chap2_Goo16}. 
+Zu große initiale Gewichte können während der Vorwärts- oder Rückwärtspropagation explodierende Werte erzeugen und die Aktivierungsfunktion saturieren, was den Gradientenverlust begünstigt \cite[vgl.~S.~301]{chap2_Goo16}. 
 Sind die Gewichte hingegen zu klein, verschwinden die Gradienten (Vanishing Gradients) und das Netzwerk lernt nicht. 
 
 Um einen vollständigen Verlust des Gradienten zu verhindern, kommen etablierte Initialisierungsstrategien wie die Xavier-Initialisierung (Glorot) oder die He-Initialisierung zum Einsatz. 
@@ -224,10 +220,10 @@ Für das Training der Zug-Policy ist ein solcher stabiler Start zwingend erforde
 
 \subsubsection{Regularisierungstechniken}
 
-Um die Modellkapazität während des Trainingsprozesses systematisch einzugrenzen und das Auswendiglernen von Strecken zu verhindern, werden netzinterne Regularisierungsverfahren implementiert.
+Um die Modellkapazität während des Trainingsprozesses systematisch einzugrenzen und streckenspezifische Überanpassung zu verhindern, werden netzinterne Regularisierungsverfahren implementiert.
 
-Die $L_2$-Regularisierung, im maschinellen Lernen häufig als Weight Decay bezeichnet, wirkt einer Überanpassung entgegen, indem sie eine mathematische Bestrafung großer Netzgewichte vornimmt \cite[vgl.][S.~230f]{chap2_Goo16}.
-„Diese Regularisierungsstrategie treibt die Gewichte näher an den Ursprung, indem ein Regularisierungsterm $\Omega(\theta) = \frac{1}{2} ||w||_2^2$ zur Zielfunktion hinzugefügt wird“ \cite[S.~230]{chap2_Goo16}. 
+Die $L_2$-Regularisierung, im maschinellen Lernen häufig als Weight Decay bezeichnet, wirkt einer Überanpassung entgegen, indem sie eine mathematische Bestrafung großer Netzgewichte vornimmt \cite[vgl.][S.~230f.]{chap2_Goo16}.
+Diese Regularisierungsstrategie treibt die Gewichte näher an den Ursprung, indem ein Regularisierungsterm $\Omega(\theta) = \frac{1}{2} ||w||_2^2$ zur Zielfunktion hinzugefügt wird \cite[vgl.~S.~230]{chap2_Goo16}. 
 Der klassischen Verlustfunktion, wie dem \gls{MSE}, wird demnach ein Penalty-Term hinzugefügt \cite[vgl.~S.~10]{chap2_Bis06}:
 
 \begin{equation} \label{eq:L2}
