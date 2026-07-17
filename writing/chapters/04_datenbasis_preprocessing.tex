@@ -1,10 +1,14 @@
 \section{Datenbasis und Preprocessing}
 
-\subsection{Datengrundlage und Explorative Datenanalyse}
+    Nachdem in den vorangegangenen Kapiteln die methodische Notwendigkeit des \gls{BC} für die Zugsteuerung etabliert wurde, widmet sich dieser Abschnitt dem praktischen Fundament der Modellbildung: den historischen Betriebsdaten. 
+    Beim \gls{IL} definiert die Qualität dieser Trainingsdaten unweigerlich die absolute Leistungsgrenze des späteren neuronalen Netzes. 
+    Um dem Modell valide physikalische Kausalitäten beizubringen und das Erlernen von Scheinkorrelationen zu verhindern, müssen die rohen und oft fehlerbehafteten Sensorausgaben zunächst systematisch aufbereitet werden. 
+    Die nachfolgenden Abschnitte beschreiben daher die vollständige Daten-Pipeline, beginnend bei der initialen Bereinigung über das domänenspezifische Feature Engineering bis hin zur finalen Transformation der Tensoren für das Training.
+
+\subsection{Datengrundlage}
 Dieses Kapitel beschreibt Herkunft und Struktur der realen Betriebsdaten, untersucht Verteilungen und greift die zuvor beschriebenen Sensorlücken und das Rauschen in den Messwerten auf.
 
-\subsection{Data Cleaning}
-Dieser Abschnitt dokumentiert Verfahren zur Behandlung fehlender Werte (Imputation) und Ausreißer sowie zur Synchronisation asynchroner Messreihen.
+\subsection{Explorative Datenanalyse und Datenaufbereitung}
 
 \subsection{Feature Engineering}
 

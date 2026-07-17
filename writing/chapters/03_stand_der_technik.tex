@@ -48,7 +48,7 @@ Das formale Ziel der Optimierung ist die Maximierung des erwarteten, diskontiert
 In der Literatur heben sich hierbei Actor-Critic-Architekturen wie die \gls{PPO} und der \gls{SAC} Algorithmus hervor. 
 \gls{PPO} balanciert als Policy-Optimierungs-Algorithmus ideal zwischen Sample-Effizienz und einfacher Implementierung, was ihn besonders attraktiv und stabil für die kontinuierliche Zugsteuerung macht \cite[vgl.~S.~41ff.]{chap3_Mwa23}. 
 Im Gegensatz dazu zeigen ältere wertbasierte Methoden Defizite in der praktischen Konvergenz: 
-DDQN benötigt im Vergleich zu PPO zwar weniger Hyperparameter, konvergierte in dem Projekt jedoch nicht zu einer optimalen Lösung \cite[vgl.~S.~46]{chap3_Mwa23}. 
+\gls{DDQN} benötigt im Vergleich zu \gls{PPO} zwar weniger Hyperparameter, konvergierte in dem Projekt jedoch nicht zu einer optimalen Lösung \cite[vgl.~S.~46]{chap3_Mwa23}. 
 Auch der hochkomplexe \gls{SAC}-Algorithmus kann beim Maximieren der Policy-Entropie destabilisiert werden und dadurch zu übermäßig aggressiven Policy-Aktualisierungen führen \cite[vgl.~S.~1]{chap3_Sha26}.
 
 \subsubsection{Cold-Start und Sample Inefficiency}
@@ -59,8 +59,8 @@ Wie bereits in Abschnitt \ref{sec:problemstellung} beschrieben, wird die direkte
 Die Literatur verweist in diesem Zusammenhang zudem auf die Sicherheitsproblematik der Trial-and-Error-Exploration in realen Betriebsumgebungen \cite[S.~2]{chap3_Lyu26}. 
 
 Darüber hinaus wird die begrenzte Nutzung von Vorwissen als zentraler Engpass beschrieben. 
-RL-Agenten haben Schwierigkeiten, die Übergangsdynamik von Umgebungen so intuitiv wie Menschen zu verstehen und Vorwissen effektiv anzuwenden \cite[vgl.~S.~1]{chap1_Wexler22}. 
-Die Literatur beschreibt diesen Engpass als zentralen Grund dafür, dass RL- und IL-Ansätze vorhandenes Expertenwissen in komplexen Domänen nur unzureichend ausnutzen \cite[S.~5042]{chap1_Silva19}. 
+\gls{RL}-Agenten haben Schwierigkeiten, die Übergangsdynamik von Umgebungen so intuitiv wie Menschen zu verstehen und Vorwissen effektiv anzuwenden \cite[vgl.~S.~1]{chap1_Wexler22}. 
+Die Literatur beschreibt diesen Engpass als zentralen Grund dafür, dass \gls{RL}- und \gls{IL}-Ansätze vorhandenes Expertenwissen in komplexen Domänen nur unzureichend ausnutzen \cite[S.~5042]{chap1_Silva19}. 
 Für die weitere Argumentation wird daher auf die in Abschnitt \ref{sec:problemstellung} eingeführte Initialisierungsproblematik verwiesen.
 
  \subsection{Imitation Learning im Verkehrswesen}
@@ -72,8 +72,8 @@ Anstatt einen Agenten isoliert durch Trial-and-Error lernen zu lassen, wird das 
 \subsubsection{Imitation Learning in der Verkehrsautomatisierung}
 
 Die Methodik, autonome Systeme durch die Nachahmung menschlicher Handlungen zu trainieren, ist im Bereich der Mobilität keineswegs neu. 
-Behavioral Cloning ist eines der am besten validierten Offline-Imitation-Learning-Verfahren, das die Policy per Supervised Learning optimiert \cite[vgl.~S.~2]{chap3_Sha24}. 
-Historisch lässt sich dieser Ansatz auf das ALVINN-Projekt zurückführen, welches bereits Ende der 1980er Jahre zeigte, dass neuronale Netze in der Lage sind, Lenkkommandos für Straßenfahrzeuge auf Basis von Kamerabildern zu erlernen.
+\gls{BC} ist eines der am besten validierten Offline-\gls{IL}-Verfahren, das die Policy per \gls{SL} optimiert \cite[vgl.~S.~2]{chap3_Sha24}. 
+Historisch lässt sich dieser Ansatz auf das \gls{ALVINN}-Projekt zurückführen, welches bereits Ende der 1980er Jahre zeigte, dass neuronale Netze in der Lage sind, Lenkkommandos für Straßenfahrzeuge auf Basis von Kamerabildern zu erlernen.
 
 Im modernen Schienenverkehr rückt dieser Ansatz verstärkt in den Fokus, da die hochkomplexe Fahrphysik von Zügen für reine Optimierungsalgorithmen schwer greifbar ist. 
 Menschliche Triebfahrzeugführer agieren hier als biologische Prädiktoren: 
@@ -88,8 +88,8 @@ Vor diesem Hintergrund werden Datensätze menschlicher Expertendemonstrationen (
 Diese bestehen aus zeitlichen Trajektorien $\tau = \{(s_1, a_1), \dots, (s_T, a_T)\}$, bei denen zu jedem Zeitschritt ein physikalischer Zustand $s_t$ (z. B. Geschwindigkeit, Steigung) einer konkreten Expertenaktion $a_t$ (z. B. Hebelstellung) zugeordnet ist. 
 Entsprechend nutzen aktuelle Ansätze diese Trajektorien zur Initialisierung des Modells \cite[S.~2]{chap3_Lyu26}.
 
-Dieser zweistufige Prozess wird in der Forschung als Warm-Start Reinforcement Learning (WSRL) formalisiert \cite[vgl.~S.~1]{chap1_Wexler22}. 
-Die initiale Policy $\pi_\theta^{BC}$ sichert dem System eine solide Grundkompetenz, welche die für das RL typische Sample-Ineffizienz und das Risiko von sicherheitskritischen Aktionen während der initialen Explorationsphase drastisch reduziert.
+Dieser zweistufige Prozess wird in der Forschung als \acrlongshort{WSRL} formalisiert \cite[vgl.~S.~1]{chap1_Wexler22}. 
+Die initiale Policy $\pi_\theta^{BC}$ sichert dem System eine solide Grundkompetenz, welche die für das \gls{RL} typische Sample-Ineffizienz und das Risiko von sicherheitskritischen Aktionen während der initialen Explorationsphase drastisch reduziert.
 
 \subsubsection{Umgang mit Covariate Shift in der Forschung}
 
@@ -97,12 +97,12 @@ Trotz des methodischen Vorteils der Datenverwertung kämpft das Offline-Imitatio
 Wie bereits in Kapitel \ref{sec:covariate_shift} dargelegt, kumulieren sich kleine Abweichungen des trainierten Modells im geschlossenen Regelkreis (Closed-Loop) quadratisch. 
 Die aktuelle Literatur benennt dieses Phänomen als primäre Fehlerquelle \cite[vgl.~S.~1]{chap3_Seo24}. 
 
-Um diesen Distribution Shift zu korrigieren, setzt die Wissenschaft in Simulationen häufig auf interaktive Algorithmen wie Dataset Aggregation (DAgger). 
-,,Interaktive IL-Algorithmen wie DAgger... nutzen eine Reduktion auf No-Regret-Online-Learning und demonstrieren, dass sie unter bestimmten Bedingungen erfolgreich eine Policy erlernen können, die den Experten imitiert'' \cite[S.~1]{chap3_Cha21}. 
-DAgger fordert einen "Teacher in the Loop", der das Modell kontinuierlich während der Fahrt korrigiert, sobald es in einen unbekannten Zustand gerät. 
+Um diesen Distribution Shift zu korrigieren, setzt die Wissenschaft in Simulationen häufig auf interaktive Algorithmen wie \gls{DAgger}. 
+,,Interaktive \gls{IL}-Algorithmen wie \gls{DAgger}... nutzen eine Reduktion auf No-Regret-Online-Learning und demonstrieren, dass sie unter bestimmten Bedingungen erfolgreich eine Policy erlernen können, die den Experten imitiert'' \cite[S.~1]{chap3_Cha21}. 
+\gls{DAgger} fordert einen "Teacher in the Loop", der das Modell kontinuierlich während der Fahrt korrigiert, sobald es in einen unbekannten Zustand gerät. 
 
 Für den realen Bahnbetrieb und historische Offline-Datensätze birgt dieser Diskurs jedoch ein massives Dilemma. 
-Solche Korrekturen erfordern Echtzeitinteraktion: ,,Diese interaktiven IL-Algorithmen können den Covariate Shift jedoch nicht nachweislich vermeiden, wenn der Experte nicht wiederherstellbar ist... Online-Interaktionen sind oft kostspielig und für reale Anwendungen verboten, bei denen eine aktive Trial-and-Error-Exploration... unsicher sein könnte'' \cite[S.~1]{chap3_Cha21}. 
+Solche Korrekturen erfordern Echtzeitinteraktion: ,,Diese interaktiven \gls{IL}-Algorithmen können den Covariate Shift jedoch nicht nachweislich vermeiden, wenn der Experte nicht wiederherstellbar ist... Online-Interaktionen sind oft kostspielig und für reale Anwendungen verboten, bei denen eine aktive Trial-and-Error-Exploration... unsicher sein könnte'' \cite[S.~1]{chap3_Cha21}. 
 Es mangelt an Systemen, die die Offline-Limitierung aufbrechen. Für reale Schienenanwendungen ist dieser Ansatz jedoch ungeeignet, da im realen Fahrbetrieb kein mathematisches Oracle existiert, das während des Zuglaufs in Millisekunden-Intervallen kontinuierlich optimale Steuerungssignale berechnen und bereitstellen kann. 
 Dies zwingt das Modellierungsverfahren, ausschließlich auf Basis statischer, historischer Sensordaten eine robuste Strategie zu extrahieren.
 
@@ -114,29 +114,29 @@ Zudem spiegeln die Daten die menschlichen Schwächen wider:
 ,,Beim traditionellen manuellen Fahrmodus ist der Fahrer anfällig für Ermüdung, was die Fahreffizienz des Zuges verringert'' \cite[S.~1]{chap3_Liu19}. 
 
 Diese Datenqualität torpediert herkömmliche Regressionsmodelle. 
-Um der daraus resultierenden Modell-Degradation zu begegnen, setzt die Forschung vor allem auf interaktive Verfahren wie DAgger, die den Lernprozess online an die Expertenverteilung heranführen. 
-Entsprechend kommen in der Literatur rekurrente Architekturen wie Long Short-Term Memory (LSTM) Netzwerke und Gated Recurrent Units (GRUs) zum Einsatz \cite[S.~2]{chap3_Lyu26}.
+Um der daraus resultierenden Modell-Degradation zu begegnen, setzt die Forschung vor allem auf interaktive Verfahren wie \gls{DAgger}, die den Lernprozess online an die Expertenverteilung heranführen. 
+Entsprechend kommen in der Literatur rekurrente Architekturen wie \glspl{LSTM} und \glspl{GRU} zum Einsatz \cite[S.~2]{chap3_Lyu26}.
 
 Darüber hinaus gilt in der Literatur der Konsens, dass Modelle strikt daran gehindert werden müssen, streckenspezifische Rauschmuster zu memorisieren. 
-Um der Leistungsdegradation (Degradation in Warm-Start RL) und dem Overfitting bei verrauschten Daten entgegenzuwirken, müssen Updates der Policy durch Konfidenzmaße oder Abstandsmetriken an die Expertenverteilung stark regularisiert bzw. eingeschränkt (Constrained Learning) werden \cite[vgl.~S.~1f.~u.~S.~6]{chap1_Wexler22}. 
+Um der Leistungsdegradation (Degradation in Warm-Start \gls{RL}) und dem Overfitting bei verrauschten Daten entgegenzuwirken, müssen Updates der Policy durch Konfidenzmaße oder Abstandsmetriken an die Expertenverteilung stark regularisiert bzw. eingeschränkt (Constrained Learning) werden \cite[vgl.~S.~1f.~u.~S.~6]{chap1_Wexler22}. 
 Nur durch diese strikte Regularisierung, gepaart mit rezurrenten Netzwerken zur physikalischen Kontextbildung, lässt sich aus statischen Historiendaten eine übertragbare, sichere Fahrstrategie formen.
 
 \subsection{Forschungslücke und Einordnung}
 \label{sec:forschungsluecke}
 
 Die vorangegangene Analyse des Standes der Technik offenbart fundamentale Schwächen bisheriger Ansätze zur Automatisierung der Zugsteuerung. 
-Konventionelle ATO-Systeme erweisen sich als zu deterministisch und starr, um auf hochdynamische, physikalische Umwelteinflüsse adaptiv zu reagieren. 
-Die Abkehr von diesen Systemen hin zum Deep Reinforcement Learning (DRL) bleibt - wie in Abschnitt \ref{sec:3.1.3} und Abschnitt \ref{sec:imitation_learning} diskutiert - durch Sample-Ineffizienz, Sparse Rewards und eingeschränkte Initialisierungsmöglichkeiten limitiert. 
-Etablierte Imitation-Learning-Ansätze adressieren diese Hürde zwar prinzipiell, verlassen sich in der aktuellen Literatur jedoch primär auf saubere, synthetische Simulatordaten oder fordern unrealistische, interaktive Korrekturen durch ein Experten-Oracle während des Trainingsprozesses (DAgger-Algorithmus).
+Konventionelle \gls{ATO}-Systeme erweisen sich als zu deterministisch und starr, um auf hochdynamische, physikalische Umwelteinflüsse adaptiv zu reagieren. 
+Die Abkehr von diesen Systemen hin zum \acrlongshort{DRL} bleibt - wie in Abschnitt \ref{sec:3.1.3} und Abschnitt \ref{sec:imitation_learning} diskutiert - durch Sample-Ineffizienz, Sparse Rewards und eingeschränkte Initialisierungsmöglichkeiten limitiert. 
+Etablierte Imitation-Learning-Ansätze adressieren diese Hürde zwar prinzipiell, verlassen sich in der aktuellen Literatur jedoch primär auf saubere, synthetische Simulatordaten oder fordern unrealistische, interaktive Korrekturen durch ein Experten-Oracle während des Trainingsprozesses (\gls{DAgger}-Algorithmus).
 
 Genau an diesem Schnittpunkt manifestiert sich die zentrale Forschungslücke: 
-Es mangelt an fundierten Konzepten, die die in Abschnitt \ref{sec:problemstellung} beschriebenen Initialisierungshürden zukünftiger RL-Agenten ausschließlich durch Offline Behavior Cloning auf Basis realer, historischer Betriebsdaten lösen. 
+Es mangelt an fundierten Konzepten, die die in Abschnitt \ref{sec:problemstellung} beschriebenen Initialisierungshürden zukünftiger \gls{RL}-Agenten ausschließlich durch Offline \gls{BC} auf Basis realer, historischer Betriebsdaten lösen. 
 Reale Sensordaten aus dem Schienennetz bilden einen starken Kontrast zu synthetischen Simulatoren. Zusätzlich zu diesen technischen Unzulänglichkeiten unterliegen die historischen Aufzeichnungen einer starken Varianz durch die inkonsistente Tagesform menschlicher Triebfahrzeugführer.
 Die informationstechnische Herausforderung, das sogenannte "Missing Link", besteht darin, aus diesem unperfekten, rein statischen Offline-Datensatz eine generalisierbare Policy $\pi_\theta$ zu extrahieren, ohne in das fatale Overfitting abzurutschen.
 
 Die vorliegende Bachelorarbeit positioniert sich exakt in dieser Lücke. 
 Durch ein rigoroses Data Preprocessing und domänenspezifisches Feature Engineering - insbesondere die Kontextualisierung von Streckengradienten und Signaldistanzen - wird eine strukturierte Datenbasis geschaffen. 
-Der methodische Kernbeitrag der Arbeit liegt in der Implementierung sequenzieller Deep-Learning-Architekturen (wie LSTMs oder GRUs) unter strikter Anwendung von Regularisierungstechniken. 
+Der methodische Kernbeitrag der Arbeit liegt in der Implementierung sequenzieller Deep-Learning-Architekturen (wie \glspl{LSTM} oder \glspl{GRU}) unter strikter Anwendung von Regularisierungstechniken. 
 Die konkrete Ausgestaltung orientiert sich an den in Kapitel 2.4 dargestellten Regularisierungstechniken, um die Überanpassung bei verrauschten Offline-Daten systematisch zu begrenzen.
 
 Das resultierende Modell dieser Arbeit liefert somit den entscheidenden Machbarkeitsnachweis: 
