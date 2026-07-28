@@ -1,0 +1,15 @@
+data/
+temp/
+tmp/
+
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+.DS_Store
+Thumbs.db
