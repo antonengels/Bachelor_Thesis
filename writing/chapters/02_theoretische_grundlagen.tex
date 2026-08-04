@@ -37,7 +37,7 @@ Diese steigen bei großen Fehlern nur noch linear an, wodurch die Parameter-Upda
 
 Um den berechneten Fehler zu minimieren, müssen die Parameter $\theta$ des Netzes zielgerichtet angepasst werden. 
 Standardmäßig erfolgt dies durch den Gradientenabstieg (Gradient Descent). 
-"In jedem Schritt wird der Parametervektor entgegen der Richtung des steilsten Anstiegs -- also des Gradienten der Verlustfunktion -- aktualisiert" \cite[S.~240]{chap2_Bis06}. 
+„In jedem Schritt wird der Parametervektor entgegen der Richtung des steilsten Anstiegs -- also des Gradienten der Verlustfunktion -- aktualisiert“ \cite[S.~240]{chap2_Bis06}. 
 Die fundamentale Update-Regel ist in Gleichung (\ref{eq:gradient_descent}) definiert:
 
 \begin{equation} \label{eq:gradient_descent}
@@ -90,17 +90,21 @@ In der Trainingsphase optimiert das Modell seine Parameter lediglich auf Basis d
 Während des Einsatzes agieren Policies jedoch sequenziell im geschlossenen Regelkreis (Closed-Loop), wobei jede Entscheidung zukünftige Beobachtungen beeinflusst und die IID-Annahme damit nicht mehr gilt \cite[vgl.~S.~3]{chap2_Kar25}.
 Diese Diskrepanz zwischen Trainings- und Inferenzzeit führt zum zentralen Problem des Behavior Cloning: 
 
-Covariate Shift (auch Distribution Shift genannt) tritt auf, wenn die Zustandsverteilung, auf die die eingesetzte Policy trifft, von der in den Trainingsdaten abweicht; im Closed-Loop verstärken sich kleine Abweichungen vom Experten im Laufe der Zeit und drängen die Policy in immer unbekanntere Regionen des Zustandsraums, bis sie sich nicht mehr erholen kann \cite[vgl.~S.~3]{chap2_Kar25}.
+Covariate Shift (auch Distribution Shift genannt) bezeichnet im vorliegenden Kontext die Verteilungsverschiebung zwischen Trainings- und Einsatzphase, bei der die Eingangsverteilungen divergieren, während die bedingte Zuordnung formal unverändert bleibt: 
+$$
+P_{train}(X) \neq P_{test}(X), \qquad P_{train}(Y\mid X) = P_{test}(Y\mid X).
+$$
+Im Closed-Loop bedeutet dies, dass bereits kleine Abweichungen von der Expertentrajektorie die Policy schrittweise in Zustandsbereiche verschieben, die unter $P_{train}(X)$ kaum oder gar nicht beobachtet wurden \cite[vgl.~S.~3]{chap2_Kar25}.
 
-Diese Fehlerakkumulation wächst über die Zeit nicht linear, sondern quadratisch an. 
-Insbesondere kann ein Klassifikator unter der vom Experten geprägten Zustandsverteilung mit Wahrscheinlichkeit $\epsilon$ einen Fehler machen und unter der von ihm selbst induzierten Verteilung über $T$ Schritte bis zu $T^2\epsilon$ Fehler akkumulieren; das liegt daran, dass der Lernende nach einem Fehler auf andere Beobachtungen trifft als bei der Expertendemonstration \cite[vgl.~S.~1]{chap2_Ros10}.
+Diese Fehlerakkumulation wächst über den Zeithorizont nicht linear, sondern quadratisch an. 
+Insbesondere kann ein Klassifikator unter der vom Experten geprägten Zustandsverteilung mit Wahrscheinlichkeit $\epsilon$ einen Fehler machen und unter der von ihm selbst induzierten Verteilung über $T$ Schritte bis zu $T^2\epsilon$ Fehler akkumulieren; formal ergibt sich dieser Verlauf aus der rekursiven Fehlermultiplikation entlang der Trajektorie, da der Lernende nach einem frühen Fehler systematisch andere Beobachtungen sieht als in der Expertendemonstration \cite[vgl.~S.~1]{chap2_Ros10}.
 
-Wenn das Modell folglich durch eigene kleine Fehlentscheidungen in unbekannte Zustände gerät, auf die es nie trainiert wurde, ist es in der Regel nicht mehr in der Lage, sich von diesen Fehlern zu erholen (Recovery), was unweigerlich zum Versagen des Systems führt \cite[vgl.~S.~16ff.]{chap2_Are20}. 
-Um dem Covariate Shift entgegenzuwirken und die Generalisierungsfähigkeit zu gewährleisten, ist der Einsatz strikter Regularisierungstechniken unerlässlich.
+Wenn das Modell folglich durch eigene kleine Fehlentscheidungen in unbekannte Zustände gerät, auf die es nie trainiert wurde, ist es in der Regel nicht mehr in der Lage, sich von diesen Fehlern zu erholen (Recovery), was in der Konsequenz zum Versagen des Systems führt \cite[vgl.~S.~16ff.]{chap2_Are20}. 
+Um dem Covariate Shift entgegenzuwirken und die Generalisierungsfähigkeit zu gewährleisten, ist der Einsatz strikter Regularisierungstechniken methodisch unumgänglich.
 
 \subsection{Geeignete Modellarchitekturen}
 
-Nachdem im vorangegangenen Kapitel das Behavior Cloning mathematisch formalisiert und die essenzielle Problematik des Covariate Shifts dargelegt wurde, bedarf es nun der Auswahl einer geeigneten Modellarchitektur. 
+Nachdem im vorangegangenen Kapitel das Behavior Cloning mathematisch formalisiert und die zentrale Problematik des Covariate Shifts dargelegt wurde, bedarf es nun der Auswahl einer geeigneten Modellarchitektur. 
 Das Ziel dieses Kapitels ist es, theoretisch fundierte Kandidaten für die Policy $\pi_\theta$ vorzustellen. 
 Da die Steuerung eines Zuges eine hochgradig sequenzielle Aufgabe darstellt, in der aktuelle physikalische Zustände stark von vergangenen Aktionen abhängen, werden verschiedene Netzarchitekturen primär hinsichtlich ihrer Fähigkeit evaluiert, derartige zeitliche Abhängigkeiten zu verarbeiten. 
 Die finale Auswahl der Architektur für diese Arbeit erfolgt jedoch nicht an dieser Stelle, sondern im weiteren Verlauf auf Basis empirischer Leistungsvergleiche in einer initialen Trainingsphase.
@@ -117,10 +121,12 @@ MLP können nicht aus Sequenzinformationen von Daten lernen; der Kontext geht da
 
 Für die Modellierung von Fahrverhalten ist diese fundamentale Amnesie kritisch. 
 Zwar punkten \gls{MLP} durch eine sehr einfache Architektur, schnelles Training und leichte Implementierbarkeit, jedoch fehlt ihnen jeglicher temporale Kontext. 
-Im Gegensatz zu rekurrenten Netzen kann ein \gls{MLP} die enorme Trägheit eines Zuges nicht erfassen. 
-Wenn der Bremshebel gezogen wird, vergehen Sekunden, bis der Bremszylinderdruck ausreichend steigt und eine Verzögerung eintritt. 
+Im Gegensatz zu rekurrenten Netzen kann ein \gls{MLP} die physikalisch relevante Trägheit des Fahrzeugsystems nicht adäquat erfassen. 
+Bei einer Siemens-Vectron-Lokomotive (Alleinfahrer, Eigenmasse etwa 80--90\,t) liegen die charakteristischen Ansprech- und Systemzeitkonstanten der Aktorik und Kinematik im Bereich von ungefähr $\tau \approx 1{,}0\,\text{s}$ bis $2{,}0\,\text{s}$; die beobachtbare Beschleunigungsänderung reagiert typischerweise mit Verzögerungen in der Größenordnung von etwa $1{,}0\,\text{s}$ bis $3{,}0\,\text{s}$. 
+Ein einzelner Snapshot $s_t$ enthält damit nicht die vollständige, für die Aktion kausale Zustandshistorie, sodass die Entscheidungsaufgabe effektiv partiell beobachtbar wird. 
 Ein \gls{MLP} besitzt keinen inhärenten Zustandsspeicher über die Zeit. Zwar kann in der Praxis ein Sliding-Window aus mehreren vergangenen Zeitschritten als flacher Eingabevektor übergeben werden, der zeitliche Kontext muss dabei jedoch explizit in den Features kodiert werden und wird nicht intern rekurrent über längere Horizonte fortgeschrieben. 
-Beim \gls{BC} führt dieses fehlende Verständnis für zeitliche Kausalitäten unweigerlich zu einem unruhigen, zitternden Fahrverhalten, dem sogenannten Chattering.
+Für eine stabile Aktionszuordnung ist daher die Aggregation eines historischen Fensters von mindestens etwa $T_{\text{window}} \approx 2\,\text{s}$ erforderlich, was sequenzbasierte beziehungsweise rekurrente Architekturen (z.\,B. \glspl{LSTM} oder zeitliche Faltungsmodelle) strukturell deutlich besser leisten. 
+Beim \gls{BC} führt dieses fehlende Verständnis für zeitliche Kausalitäten systembedingt zu einem unruhigen, zitternden Fahrverhalten, dem sogenannten Chattering.
 
 \begin{figure}[htbp]
     \centering
@@ -142,7 +148,7 @@ Ein strukturelles Defizit zeigt sich jedoch beim Training über lange Sequenzen 
 Durch fortlaufende Matrixmultiplikationen neigen die Fehlergradienten dazu, instabil zu werden. 
 „Das Problem der verschwindenden und explodierenden Gradienten bezieht sich auf die Tatsache, dass Gradienten durch einen solchen Graphen ebenfalls skaliert werden. Verschwindende Gradienten machen es schwer zu erkennen, in welche Richtung sich die Parameter bewegen sollten [...], während explodierende Gradienten das Lernen instabil machen können“ \cite[S.~289]{chap2_Goo16}. 
 Bei langen Zugfahrten - beispielsweise wenn ein rotes Signal bereits vor drei Kilometern erkannt wurde - scheitert das einfache \gls{RNN} an diesen verschwindenden Gradienten (Vanishing Gradients). 
-Es vergisst die frühe, aber essenzielle Information, bevor der Zug den eigentlichen Bremspunkt erreicht.
+Es vergisst die frühe, aber maßgebliche Information, bevor der Zug den eigentlichen Bremspunkt erreicht.
 
 \begin{figure}[htbp]
     \centering
@@ -216,7 +222,7 @@ Sind die Gewichte hingegen zu klein, verschwinden die Gradienten (Vanishing Grad
 
 Um einen vollständigen Verlust des Gradienten zu verhindern, kommen etablierte Initialisierungsstrategien wie die Xavier-Initialisierung (Glorot) oder die He-Initialisierung zum Einsatz. 
 Diese Verfahren halten die Varianz der Aktivierungen und Gradienten über die Schichten hinweg konstant. 
-Für das Training der Zug-Policy ist ein solcher stabiler Start zwingend erforderlich, damit das Modell nicht sofort in einem schlechten lokalen Minimum stagniert - beispielsweise in einem Zustand, in dem es pauschal stets den Bremshebel betätigt, nur um den anfänglichen Trainingsfehler (Loss) künstlich zu minimieren.
+Für das Training der Zug-Policy ist ein solcher stabiler Start von zentraler Bedeutung, damit das Modell nicht sofort in einem schlechten lokalen Minimum stagniert - beispielsweise in einem Zustand, in dem es pauschal stets den Bremshebel betätigt, nur um den anfänglichen Trainingsfehler (Loss) künstlich zu minimieren.
 
 \subsubsection{Regularisierungstechniken}
 
