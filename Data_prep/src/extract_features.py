@@ -31,6 +31,7 @@ Disable CSV export:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -1517,6 +1518,30 @@ def _resume_state_matches_config(
     )
 
 
+def _recording_source_signature(files: list[Path]) -> str:
+    """Return a stable signature for the current recording chunk set.
+
+    The signature changes when files are added/removed or when size/mtime
+    metadata changes, allowing incremental re-runs to process only updated
+    recordings.
+    """
+    digest = hashlib.sha1()
+    for path in sorted(files):
+        stat = path.stat()
+        digest.update(str(path).encode("utf-8", errors="replace"))
+        digest.update(b"|")
+        digest.update(str(stat.st_size).encode("ascii"))
+        digest.update(b"|")
+        digest.update(str(stat.st_mtime_ns).encode("ascii"))
+        digest.update(b"\n")
+    return digest.hexdigest()
+
+
+def _resume_state_source_matches(state: dict, source_signature: str) -> bool:
+    """Return True when saved state belongs to the same input chunk set."""
+    return str(state.get("source_signature", "")) == source_signature
+
+
 def _write_resume_state(
     recording_name: str,
     output_root: Path,
@@ -1525,6 +1550,7 @@ def _write_resume_state(
     csv_export: bool,
     trip_split_enabled: bool,
     topology_enabled: bool,
+    source_signature: str,
 ) -> None:
     """Persist a minimal marker so interrupted runs can resume efficiently."""
     state = {
@@ -1533,6 +1559,7 @@ def _write_resume_state(
         "csv_export": bool(csv_export),
         "trip_split": bool(trip_split_enabled),
         "topology_enabled": bool(topology_enabled),
+        "source_signature": source_signature,
     }
     state_path = _resume_state_path(recording_name, output_root)
     state_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1826,7 +1853,9 @@ def main(argv=None) -> None:
 
     pending_recordings: list[tuple[str, list[Path]]] = []
     resumed_recordings = 0
+    changed_recordings = 0
     for name, files in recordings:
+        source_signature = _recording_source_signature(files)
         state = _load_resume_state(name, args.output)
         if state is not None and _resume_state_matches_config(
             state,
@@ -1834,19 +1863,22 @@ def main(argv=None) -> None:
             trip_split_enabled=trip_split_config.enabled,
             topology_enabled=topology_enabled,
         ):
-            state_keys = {str(key) for key in state.get("available_keys", [])}
-            missing = _missing_recording_outputs(
-                name,
-                args.output,
-                args.csv_export,
-                topology_enabled,
-                state_keys,
-            )
-            if not missing:
-                recording_available_keys[name] = state_keys
-                recording_bad_files[name] = set()
-                resumed_recordings += 1
-                continue
+            if _resume_state_source_matches(state, source_signature):
+                state_keys = {str(key) for key in state.get("available_keys", [])}
+                missing = _missing_recording_outputs(
+                    name,
+                    args.output,
+                    args.csv_export,
+                    topology_enabled,
+                    state_keys,
+                )
+                if not missing:
+                    recording_available_keys[name] = state_keys
+                    recording_bad_files[name] = set()
+                    resumed_recordings += 1
+                    continue
+            else:
+                changed_recordings += 1
 
         inferred_keys = _infer_available_keys_from_outputs(name, args.output)
         if inferred_keys:
@@ -1868,7 +1900,7 @@ def main(argv=None) -> None:
     total_bytes = sum(p.stat().st_size for _, files in pending_recordings for p in files)
     n_files = sum(len(files) for _, files in pending_recordings)
     print(
-        f"Recordings: {total_recordings} (resume-skip: {resumed_recordings}, to-process: {len(pending_recordings)}) | "
+        f"Recordings: {total_recordings} (resume-skip: {resumed_recordings}, changed: {changed_recordings}, to-process: {len(pending_recordings)}) | "
         f"files: {n_files}/{total_files} | {total_bytes / 1e9:.2f}/{total_bytes_all / 1e9:.2f} GB | "
         f"jobs: {jobs} | recording-jobs: {recording_jobs}"
     )
@@ -1899,6 +1931,7 @@ def main(argv=None) -> None:
                     csv_export=args.csv_export,
                     trip_split_enabled=trip_split_config.enabled,
                     topology_enabled=topology_enabled,
+                    source_signature=_recording_source_signature(files),
                 )
                 if files and result.aoecl_failed_files >= len(files):
                     corrupted_recordings.add(name)
@@ -1955,6 +1988,7 @@ def main(argv=None) -> None:
                         csv_export=args.csv_export,
                         trip_split_enabled=trip_split_config.enabled,
                         topology_enabled=topology_enabled,
+                        source_signature=_recording_source_signature(files),
                     )
                     if files and result.aoecl_failed_files >= len(files):
                         corrupted_recordings.add(name)
