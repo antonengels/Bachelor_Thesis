@@ -16,23 +16,23 @@ Darüber hinaus warnt das flache Streckenprofil bereits a priori vor einem signi
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=0.7\textwidth]{vectron.jpg}
-    \caption{Abgebildet ist eine der beiden Siemens-Vectron-Lokomotiven, die für die Datenerhebung eingesetzt wurden \cite{vectron}.}
+    \caption[Vectron-Lokomotive]{Abgebildet ist eine der beiden Siemens-Vectron-Lokomotiven, die für die Datenerhebung eingesetzt wurden \cite{vectron}.}
     \label{fig:vectron}
 \end{figure}
 
 Der erfasste Datensatz erstreckt sich über einen kontinuierlichen Aufzeichnungszeitraum von 84 Tagen (Daten aus 2026) und umfasst ein Speichervolumen von circa 50 Gigabyte im komprimierten \texttt{pcapng.gz}-Format. 
 Die Datenerfassung erfolgte über ein ethernet-basiertes Aufzeichnungssystem. 
-Auf Ebene der Quellsysteme beschreiben die folgenden Werte die Nenn-Abtastraten (Soll-Spezifikation) der jeweiligen Subsysteme im CCS-Verbund (ETCS, RST, ATO): 
+Auf Ebene der Quellsysteme beschreiben die folgenden Werte die Nenn-Abtastraten (Soll-Spezifikation) der jeweiligen Subsysteme im \gls{CCS}-Verbund (\gls{ETCS}, \gls{RST}, \gls{ATO}): 
 Aktorik-Signale mit 20\,Hz (50\,ms), kinematische Größen mit 5\,Hz (200\,ms) und statische Streckendaten mit bis zu 1\,Hz (1000\,ms). 
-Diese Angaben charakterisieren die diskrete Sensor- beziehungsweise Telegrammaktualisierung auf Subsystemebene und sind von der später beobachteten Empfangsstatistik des aggregierten ORD-Datenstroms strikt zu trennen. 
+Diese Angaben charakterisieren die diskrete Sensor- beziehungsweise Telegrammaktualisierung auf Subsystemebene und sind von der später beobachteten Empfangsstatistik des aggregierten \gls{ORD}-Datenstroms strikt zu trennen. 
 
 Durch die formale Strukturierung lassen sich die extrahierten Roh-Variablen kategorisieren und den Dimensionen des Zustands- und Aktionsraums zuweisen. 
-Die Fahrzeugkinematik wird durch die Ist-Geschwindigkeit (\texttt{V\_EST}) und die Beschleunigung (\texttt{A\_EST}) abgebildet. Die restriktiven Streckenlimits werden über die zulässige Höchstgeschwindigkeit \texttt{V\_PERMITTED} (ETCS-OB Paket 6) repräsentiert. 
+Die Fahrzeugkinematik wird durch die Ist-Geschwindigkeit (\texttt{V\_EST}) und die Beschleunigung (\texttt{A\_EST}) abgebildet. Die restriktiven Streckenlimits werden über die zulässige Höchstgeschwindigkeit \texttt{V\_PERMITTED} (\gls{ETCS}-OB Paket 6) repräsentiert. 
 Das Signal \texttt{A\_EST} liegt dabei im Rohdatenstrom als herstellerspezifisch skaliertes Festkomma-Signal in \(\mathrm{mm/s^2}\) vor, wobei \(1\,\text{Unit}=0{,}001\,\mathrm{m/s^2}\) gilt (\(1000\,\text{Units}=1{,}0\,\mathrm{m/s^2}\)). 
 Die im Datensatz beobachteten Wertebereiche von ungefähr \([-1000,+700]\) entsprechen damit physikalisch plausiblen Verzögerungen bis etwa \(-1{,}0\,\mathrm{m/s^2}\) (Betriebsbremsung) sowie Anfahrbeschleunigungen bis etwa \(+0{,}7\,\mathrm{m/s^2}\) auf der Betuweroute. 
 Im späteren Preprocessing werden diese Rohwerte mittels Z-Score-Standardisierung \(z=(x-\mu)/\sigma\) in einen zentrierten, dimensionslosen Zustandsraum für PyTorch überführt.
-Aus protokolltechnischer Sicht des ATO-over-ETCS-Standards (insbesondere Paket 4/103) gehören dazu ferner Topologie- und Kontextfelder wie der Streckengradient (\texttt{A\_GRADIENT}) und die Schienenhaftung (\texttt{Q\_ADHESION}) sowie fahrzeuginterne Rückmeldungen (\texttt{M\_RST\_TBsetVal}). 
-Die anschließende Sichtung des vorliegenden ORD-Rohdatenextrakts zeigte jedoch, dass \texttt{Q\_ADHESION} in der verfügbaren Aufzeichnungsstufe nicht belegt war und somit als systematisch fehlendes Signal zu behandeln ist. 
+Aus protokolltechnischer Sicht des \gls{ATO}-over-\gls{ETCS}-Standards (insbesondere Paket 4/103) gehören dazu ferner Topologie- und Kontextfelder wie der Streckengradient (\texttt{A\_GRADIENT}) und die Schienenhaftung (\texttt{Q\_ADHESION}) sowie fahrzeuginterne Rückmeldungen (\texttt{M\_RST\_TBsetVal}). 
+Die anschließende Sichtung des vorliegenden \gls{ORD}-Rohdatenextrakts zeigte jedoch, dass \texttt{Q\_ADHESION} in der verfügbaren Aufzeichnungsstufe nicht belegt war und somit als systematisch fehlendes Signal zu behandeln ist. 
 Methodisch wird \texttt{Q\_ADHESION} daher als standardseitig relevantes, im konkreten Datensatz jedoch nicht beobachtbares Feld klassifiziert und folgerichtig nicht in den tatsächlich modellierten Feature-Vektor aufgenommen. 
 Dem gegenüber steht die Zielvariable \texttt{M\_ATO\_RTBRq} -- die vom menschlichen Fahrer geforderte Hebelstellung. Diese wird ausdrücklich als das Label $Y$ definiert, welches es zu prädizieren gilt. 
 Durch diese präzise Zuweisung von Input-Features $X$ und Label $Y$ wird das unstrukturierte, reale Zug-Szenario mathematisch formalisiert und in ein klassisches Regressionsproblem des Supervised Learning ($X \rightarrow Y$) übersetzt.
@@ -57,7 +57,7 @@ Durch diesen strengen Aufbereitungsprozess wird sichergestellt, dass das Modell 
 \subsubsection{Data Cleaning und zeitliche Synchronisierung}
 
 Im ersten Schritt der Datenbereinigung müssen systemspezifische Fehlercodes, sogenannte Sentinels, sowie ungültige Messungen adressiert werden. 
-Dem vorgelagert wurde ein strikter Topologie-Filter angewandt: Alle Fahrten, die nicht zweifelsfrei der Betuweroute zugeordnet werden konnten (z.\,B. Rangierfahrten, Zubringerabschnitte oder Trips mit unvollständigen GPS-/Topologie-Logs), wurden konsequent ausgeschlossen. 
+Dem vorgelagert wurde ein strikter Topologie-Filter angewandt: Alle Fahrten, die nicht zweifelsfrei der Betuweroute zugeordnet werden konnten (z.\,B. Rangierfahrten, Zubringerabschnitte oder Trips mit unvollständigen \gls{GPS}-/Topologie-Logs), wurden konsequent ausgeschlossen. 
 Diese Selektion ist methodisch notwendig, um eine konsistente Strecken- und Gradientenbasis (\texttt{A\_GRADIENT}) sicherzustellen und Störrauschen aus heterogenen Infrastrukturen im Zustandsraum zu vermeiden. 
 Der finale Arbeitsdatensatz umfasst damit 403 Trips und besteht zu 100\,\% aus verifizierten Betuweroute-Fahrten; dies bildet die systematische Grundlage für das spätere trip-basierte Splitting. 
 Das Aufzeichnungssystem protokolliert Sensorausfälle durch fest definierte Extremwerte, wie beispielsweise $65535$ bei Geschwindigkeitssignalen (\texttt{V\_EST}, \texttt{V\_PERMITTED}) und $\pm 32768$ beziehungsweise $32767$ bei Beschleunigungs- und Gradientendaten (\texttt{A\_EST}, \texttt{A\_GRADIENT}). 
@@ -75,8 +75,8 @@ Dies führt deterministisch zu verschwindenden oder explodierenden Gradienten (V
 
 Neben der Wertebereinigung erforderte die asynchrone und uneinheitliche Aufzeichnungsfrequenz der Rohdaten eine zeitliche Synchronisierung. 
 Das ursprüngliche Median-Abtastintervall betrug circa 34\,ms, wies jedoch eine starke Spanne von 8 bis 118\,ms auf. 
-Dies entspricht einer effektiven Ereignisdichte von etwa 28 bis 30\,Hz im aggregierten Datenstrom des On-board Recording Devices (ORD), nicht jedoch einer physikalischen Abtastrate einzelner Sensoren. 
-Die Diskrepanz zwischen Soll-Nennfrequenzen der Quellsysteme und beobachteter Ist-Dichte entsteht durch asynchrone Telegrammankünfte, Bus-Overhead, Jitter, Paketierung und das Übertragungsverhalten des ethernet-basierten CCS Consist Networks. 
+Dies entspricht einer effektiven Ereignisdichte von etwa 28 bis 30\,Hz im aggregierten Datenstrom des On-board Recording Devices (\gls{ORD}), nicht jedoch einer physikalischen Abtastrate einzelner Sensoren. 
+Die Diskrepanz zwischen Soll-Nennfrequenzen der Quellsysteme und beobachteter Ist-Dichte entsteht durch asynchrone Telegrammankünfte, Bus-Overhead, Jitter, Paketierung und das Übertragungsverhalten des ethernet-basierten \gls{CCS} Consist Networks. 
 Um aus diesem asynchronen Ist-Datenstrom einen für PyTorch konsistenten, synchronen State Space zu erzeugen, wurden die Signalgruppen mittels Zeit-Binning, Outer-Join und anschließendem Resampling mit Forward-Fill auf ein konstantes Zeitraster überführt (modellabhängig 200\,ms/5\,Hz beziehungsweise 100\,ms/10\,Hz). 
 Die durch diese Diskretisierung verbleibenden Datenlücken erwiesen sich als minimal: 
 Der Median der größten Lücke pro Fahrt (Trip) lag bei lediglich 173\,ms. Lücken von über 2\,s existierten mit durchschnittlich 0,05 Vorkommnissen pro Trip praktisch nicht. 
@@ -84,7 +84,7 @@ Zur Sicherstellung der zeitlichen Kohärenz wurden Trips bei Unterbrechungen von
 
 Die Reduktion der zeitlichen Auflösung (Downsampling) von 30\,Hz auf 5\,Hz lässt sich physikalisch und signaltheoretisch begründen. 
 Die steuerungsrelevante Fahrdynamik einer Vectron-Lokomotive wird durch Aktorik- und Trägheitszeitkonstanten im Bereich von etwa $1{,}0\,\text{s}$ bis $2{,}0\,\text{s}$ (Bremsdruckaufbau/Ansprechverhalten) sowie kinematische Reaktionszeiten bis ungefähr $3{,}0\,\text{s}$ geprägt. 
-Daraus folgt eine dominante Dynamik mit Grenzfrequenzen deutlich unterhalb von $1\,\text{Hz}$; hochfrequente Anteile oberhalb von etwa $5\,\text{Hz}$ (unter 200\,ms) sind im vorliegenden ORD-Strom daher überwiegend auf Sensor-Jitter, Paketierung und Bus-Overhead zurückzuführen, nicht auf reale Fahr- oder Bremszustandsänderungen. 
+Daraus folgt eine dominante Dynamik mit Grenzfrequenzen deutlich unterhalb von $1\,\text{Hz}$; hochfrequente Anteile oberhalb von etwa $5\,\text{Hz}$ (unter 200\,ms) sind im vorliegenden \gls{ORD}-Strom daher überwiegend auf Sensor-Jitter, Paketierung und Bus-Overhead zurückzuführen, nicht auf reale Fahr- oder Bremszustandsänderungen. 
 Mit einer Abtastrate von $f_s=5\,\text{Hz}$ wird die Nyquist-Bedingung für die relevante Systemdynamik ($f_{max}\approx0{,}5\text{ bis }1{,}0\,\text{Hz}$, also $f_s \gg 2f_{max}$) klar erfüllt, sodass die fahrdynamisch relevanten Signalverläufe aliasing-frei und ohne informationskritischen Verlust repräsentiert werden. 
 Durch das Downsampling wird die Rechenlast drastisch reduziert und die extrem hohe Autokorrelation benachbarter Frames minimiert, wodurch redundante Informationen aus dem Datensatz entfernt werden. 
 Dies führt zu kompakteren Sequenzlängen, was insbesondere das \gls{BPTT}-Verfahren beim Training rekurrenter neuronaler Netze über lange zeitliche Horizonte signifikant stabilisiert.
@@ -99,7 +99,7 @@ Die Verteilung zeigt eine deutliche Konzentration um den Nullpunkt, was die phys
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=0.8\textwidth]{02_distributions.png}
-    \caption{Verteilung des Features \texttt{A\_EST} nach der Bereinigung. Die x-Achse zeigt die Signalwerte, die y-Achse die absolute Häufigkeit im Datensatz (logarithmische Skalierung).}
+    \caption[Verteilung von A\_EST]{Verteilung des Features \texttt{A\_EST} nach der Bereinigung. Die x-Achse zeigt die Signalwerte, die y-Achse die absolute Häufigkeit im Datensatz (logarithmische Skalierung).}
     \label{fig:a_est_dist}
 \end{figure}
 
@@ -114,7 +114,7 @@ Es zeigt sich, dass sich auch die tatsächlichen Hebelbewegungen stark um kleine
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=1\textwidth]{07_label_analysis.png}
-    \caption{Analyse der Zielvariable \texttt{M\_ATO\_RTBRq}. Links: Prozentuale Verteilung der diskreten Hebelzustände (Bremsen, Neutral, Beschleunigen). Rechts: Histogramm der kontinuierlichen Label-Werte (exklusive exakter Nullwerte), welches die starke Konzentration um kleine Beträge aufzeigt.}
+    \caption[Verteilung der Zielvariable]{Analyse der Zielvariable \texttt{M\_ATO\_RTBRq}. Links: Prozentuale Verteilung der diskreten Hebelzustände (Bremsen, Neutral, Beschleunigen). Rechts: Histogramm der kontinuierlichen Label-Werte (exklusive exakter Nullwerte), welches die starke Konzentration um kleine Beträge aufzeigt.}
     \label{fig:label_dist}
 \end{figure}
 
@@ -138,7 +138,7 @@ Die resultierende Korrelationsmatrix ist in Abbildung \ref{fig:spearman_corr} al
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=1\textwidth]{05_spearman.png}
-    \caption{Spearman-Korrelationsmatrix der Sensorwerte und der Zielvariable. Die Heatmap visualisiert die monotonen, nicht-linearen Abhängigkeiten zwischen den Features (Multikollinearität) sowie deren individuelle Vorhersagekraft für die Hebelstellung \texttt{M\_ATO\_RTBRq} (Feature Importance).}
+    \caption[Spearman-Korrelationsmatrix]{Spearman-Korrelationsmatrix der Sensorwerte und der Zielvariable. Die Heatmap visualisiert die monotonen, nicht-linearen Abhängigkeiten zwischen den Features (Multikollinearität) sowie deren individuelle Vorhersagekraft für die Hebelstellung \texttt{M\_ATO\_RTBRq} (Feature Importance).}
     \label{fig:spearman_corr}
 \end{figure}
 
@@ -164,7 +164,7 @@ Folglich bilden diese stark korrelierenden Sensordaten primäre Kandidaten für 
 
 Um die funktionale Integrität des bereinigten Datensatzes abschließend zu verifizieren, wurde eine übergeordnete Plausibilitätsprüfung (Sanity-Check) anhand aggregierter Kennzahlen durchgeführt. 
 Der Abgleich der geschätzten Sensor-Beschleunigung \texttt{A\_EST} mit der numerischen Ableitung der Geschwindigkeit nach der Zeit ($\frac{dV}{dt}$) ergab eine hohe Spearman-Korrelation von $\rho = 0{,}81$ bei einem Skalierungsfaktor von etwa $6$, was die physikalische Konsistenz der Sensorik bestätigt. 
-Der Faktor lässt sich technisch durch die kombinierte Einheiten- und Filtersystematik erklären: Während \texttt{A\_EST} SI-basiert in \(\mathrm{mm/s^2}\) skaliert übertragen wird, liegt der Differenzenquotient aus \texttt{V\_EST} in \((\mathrm{km/h})/\mathrm{s}\) vor; allein die Umrechnung \(1\,\mathrm{m/s^2}=3{,}6\,(\mathrm{km/h})/\mathrm{s}\) erzeugt bereits einen systematischen Maßstabsversatz. 
+Der Faktor lässt sich technisch durch die kombinierte Einheiten- und Filtersystematik erklären: Während \texttt{A\_EST} \gls{SI}-basiert in \(\mathrm{mm/s^2}\) skaliert übertragen wird, liegt der Differenzenquotient aus \texttt{V\_EST} in \((\mathrm{km/h})/\mathrm{s}\) vor; allein die Umrechnung \(1\,\mathrm{m/s^2}=3{,}6\,(\mathrm{km/h})/\mathrm{s}\) erzeugt bereits einen systematischen Maßstabsversatz. 
 Die darüber hinausgehende Abweichung resultiert aus der sensorseitigen Tiefpassfilterung und Glättung im Bordrechner, wodurch \texttt{A\_EST} gegenüber der roh differenzierten Geschwindigkeit amplituden- und phasenmodifiziert erscheint. 
 Zudem stimmte das Vorzeichen der Hebelstellung in 78\,\% der Fälle mit der resultierenden Beschleunigungsrichtung überein. 
 Auch die grundlegende Fahrlogik, wonach die Ist-Geschwindigkeit die zulässige Höchstgeschwindigkeit nicht überschreiten sollte (\texttt{V\_EST} $\le$ \texttt{V\_PERMITTED}), war in 90,7\,\% der Datenpunkte erfüllt. 
@@ -173,7 +173,7 @@ Physisch unmögliche Zustände wie negative Geschwindigkeiten (0\,\%) oder Werte
 \begin{figure}[htbp]
     \centering
     \includegraphics[angle=90,height=0.9\textheight]{11_sample_trip.png}
-    \caption{Zeitreihen-Analyse einer beispielhaften Fahrt. Die Darstellung überlagert die physikalischen Zustandsgrößen (Geschwindigkeit und Beschleunigung) mit den korrespondierenden Expertenaktionen (Hebelstellung) über die Zeit und verdeutlicht das physikalisch plausible Brems- und Beschleunigungsverhalten.}
+    \caption[Zeitreihe einer Beispiel-Fahrt]{Zeitreihen-Analyse einer beispielhaften Fahrt. Die Darstellung überlagert die physikalischen Zustandsgrößen (Geschwindigkeit und Beschleunigung) mit den korrespondierenden Expertenaktionen (Hebelstellung) über die Zeit und verdeutlicht das physikalisch plausible Brems- und Beschleunigungsverhalten.}
     \label{fig:sample_trip}
 \end{figure}
 
@@ -184,10 +184,10 @@ Das Beschleunigungsverhalten ist gleichermaßen nachvollziehbar, da der Zugkraft
 Trotz dieser offensichtlichen physikalischen Plausibilität offenbart die Analyse signifikante Lücken im Merkmalsraum. 
 Wesentliche physikalische und umweltbedingte Einflussgrößen (Hidden Variables) sind im Datensatz nicht repräsentiert. 
 Dazu zählen fundamentale fahrzeugspezifische Konstanten wie die aktuelle Zugmasse beziehungsweise Beladung, die Zuglänge sowie die exakte Bremskraft-Charakteristik des eingesetzten Fahrzeugtyps. 
-Auch Umwelteinflüsse wie Nässe, Laub, Temperatur oder Wind, welche die Adhäsion massiv beeinflussen, fehlen als direktes Messsignal; insbesondere ist das im Standardkontext vorgesehene Feld \texttt{Q\_ADHESION} im vorliegenden ORD-Extrakt nicht belegt. 
+Auch Umwelteinflüsse wie Nässe, Laub, Temperatur oder Wind, welche die Adhäsion massiv beeinflussen, fehlen als direktes Messsignal; insbesondere ist das im Standardkontext vorgesehene Feld \texttt{Q\_ADHESION} im vorliegenden \gls{ORD}-Extrakt nicht belegt. 
 Darüber hinaus fehlt der übergeordnete betriebliche Kontext, wie etwa Zeitdruck durch den Fahrplan, vorausschauende Signalbilder aus der \gls{LZB}, die über das aktuelle \texttt{V\_PERMITTED} hinausgehen, oder der spezifische Grund eines Halts.
 
-Aus algorithmischer Sicht impliziert dieser Befund, dass das Imitationslernproblem nicht als vollständig beobachtbarer Markov-Entscheidungsprozess (MDP), sondern als partiell beobachtbarer Prozess (POMDP) aufzufassen ist: Der reale Systemzustand enthält latente Größen, die im Beobachtungsvektor nicht enthalten sind. 
+Aus algorithmischer Sicht impliziert dieser Befund, dass das Imitationslernproblem nicht als vollständig beobachtbarer Markov-Entscheidungsprozess (\gls{MDP}), sondern als partiell beobachtbarer Prozess (\gls{POMDP}) aufzufassen ist: Der reale Systemzustand enthält latente Größen, die im Beobachtungsvektor nicht enthalten sind. 
 Analoge Effekte der in Abschnitt 4.1 eingeführten \textit{Causal Confusion} zeigen sich hier bei der Adhäsionsdynamik: Wenn ein Triebfahrzeugführer aufgrund nasser Schienen frühzeitig bremst, entsprechende Reibwert- beziehungsweise Wettersignale aber fehlen, wird das Netz gezwungen, dieses Manöver beobachtbaren, jedoch ursächlich unbeteiligten Merkmalen zuzuschreiben. 
 Methodisch muss die fehlende Reibwertinformation daher implizit über beobachtbare Proxys erschlossen werden, insbesondere über die dynamische Abweichung zwischen Soll- und Ist-Beschleunigung (\texttt{A\_EST}) in Kombination mit dem Radschlupf-Signal \texttt{M\_RST\_SlipSlide}. 
 Ein konsistentes Lernziel besteht folglich darin, potenzielle Adhäsionsverluste nicht als direktes Eingangssignal zu erwarten, sondern als latenten Zustand aus diesen messbaren Fehlanpassungen zu inferieren.
@@ -220,12 +220,12 @@ Ohne diese Topologieinformation kann das Netz nicht kausal unterscheiden, ob ein
 
 \begin{itemize}
     \item \textbf{Absoluter Spearman-Koeffizient ($|\rho|$):} Diese Metrik misst robuste, monotone -- und damit auch nicht-lineare -- Zusammenhänge zwischen dem jeweiligen potenziellen Feature und der Zielvariable.
-    \item \textbf{Mutual Information (MI):} Dieses informationstheoretische Maß erfasst jegliche Form von Abhängigkeiten, einschließlich rein nicht-linearer und nicht-monotoner Informationsgehalte, die durch klassische Korrelationskoeffizienten nicht abgebildet werden.
+    \item \textbf{\acrlongshort{MI}:} Dieses informationstheoretische Maß erfasst jegliche Form von Abhängigkeiten, einschließlich rein nicht-linearer und nicht-monotoner Informationsgehalte, die durch klassische Korrelationskoeffizienten nicht abgebildet werden.
     \item \textbf{Absoluter standardisierter \gls{OLS}-Koeffizient ($|\beta|$):} Mittels einer gewöhnlichen Fehlerquadratmethode (Ordinary Least Squares, \gls{OLS}) wird der tatsächliche multivariate Beitrag eines Features bewertet, wobei die Effekte bestehender Multikollinearität systematisch herausgerechnet werden.
 \end{itemize}
 
 Um Verzerrungen durch eine Einzelmetrik zu vermeiden, wird ergänzend ein aggregierter Gesamtindex als Composite Rank $R_{\text{composite}}$ gebildet. 
-Die Berechnung erfolgt als arithmetisches Mittel der drei Einzelränge aus Spearman, Mutual Information und \gls{OLS}:
+Die Berechnung erfolgt als arithmetisches Mittel der drei Einzelränge aus Spearman, \gls{MI} und \gls{OLS}:
 
 \begin{equation}
     R_{\text{composite}} = \frac{R_{\text{Spearman}} + R_{\text{MI}} + R_{\text{OLS}}}{3}
@@ -250,7 +250,7 @@ Sie berechnet sich als der gleitende Mittelwert (Simple Moving Average) des rohe
 
 Signaltheoretisch wirkt diese Operation wie ein maßgeblicher Tiefpassfilter. 
 Das sprunghafte und von Sensorrauschen geprägte Originalsignal \texttt{A\_EST} wird entrauscht, wodurch der zugrundeliegende physikalische Trend maschinell verdaubar wird. 
-Dies spiegelt sich in den hervorragenden Evaluationsmetriken wider: Das Feature erreicht einen Spearman-Koeffizienten von $0{,}52$ und die höchste Mutual Information (MI) von $0{,}26$.
+Dies spiegelt sich in den hervorragenden Evaluationsmetriken wider: Das Feature erreicht einen Spearman-Koeffizienten von $0{,}52$ und die höchste \gls{MI} von $0{,}26$.
 
 Als ergänzendes Feature wurde die numerische Ableitung der Ist-Geschwindigkeit nach der Zeit, \texttt{a\_num} ($\frac{dV}{dt}$), berechnet (Rang 3). 
 Die Berechnung über das diskrete Zeitintervall $\Delta t = 0{,}2\,\text{s}$ lautet:
@@ -271,7 +271,7 @@ Es beschreibt die gleitende Standardabweichung der Geschwindigkeit über ein Zwe
 \end{equation}
 
 Die lineare und monotone Korrelation dieses Features mit der Zielvariable ist praktisch null (Spearman $\approx 0$). 
-Die Mutual Information erreicht jedoch einen signifikanten Wert von $0{,}15$. 
+Die \gls{MI} erreicht jedoch einen signifikanten Wert von $0{,}15$. 
 Dieses Merkmal fungiert für das Modell als ein rein nicht-linearer Indikator für volatile Phasen, beispielsweise an den kritischen Übergängen zwischen Brems- und Beschleunigungsvorgängen, was von klassischen Korrelationsmetriken völlig unbemerkt bliebe.
 
 Als am wenigsten geeignet (Rang 6,3) erwies sich hingegen der Ruck (\texttt{jerk}), welcher die zeitliche Änderungsrate der Beschleunigung darstellt:
@@ -307,7 +307,7 @@ Ergänzend zur relativen Metrik wurde die absolute Geschwindigkeitsreserve \text
 \end{equation}
 
 Die Evaluation dieses Features veranschaulicht eindrucksvoll die Problematik der Multikollinearität im Feature Engineering. 
-Univariat betrachtet ist das Merkmal äußerst aussagekräftig, was durch einen hohen Mutual-Information-Wert (MI) von $0{,}29$ belegt wird. 
+Univariat betrachtet ist das Merkmal äußerst aussagekräftig, was durch einen hohen \gls{MI}-Wert von $0{,}29$ belegt wird. 
 Im multivariaten Kontext des Modells fällt die Relevanz jedoch signifikant ab ($|\beta| = 0{,}08$). 
 Die Ursache hierfür liegt in der massiven Redundanz zu \texttt{v\_ratio} und den zugrundeliegenden rohen Geschwindigkeitssignalen. 
 Das Merkmal bläht den Merkmalsraum auf, ohne dem Netz unabhängige, neue Informationen zu liefern.
@@ -335,7 +335,7 @@ Vor der finalen Merkmalsreduktion wird der experimentelle Kreuzterm \texttt{grad
 
 Die physikalische Motivation dieses Terms liegt in der Abbildung eines neigungsabhängigen Lastanteils als Proxy für topologieinduzierten Fahrwiderstand beziehungsweise zusätzlichen Antriebsbedarf. 
 Aus ML-Perspektive sollte das Produktmerkmal testen, ob eine explizite Interaktion zwischen Topologie und Fahrzustand zusätzliche nicht-lineare Information gegenüber den Einzelmerkmalen bereitstellt. 
-Die Evaluation zeigt jedoch einen sehr geringen Informationsgehalt (Spearman $\rho = 0{,}06$, MI $= 0{,}05$, standardisierter \gls{OLS}-Koeffizient $\beta = 0{,}06$, Rang 7). 
+Die Evaluation zeigt jedoch einen sehr geringen Informationsgehalt (Spearman $\rho = 0{,}06$, \gls{MI} $= 0{,}05$, standardisierter \gls{OLS}-Koeffizient $\beta = 0{,}06$, Rang 7). 
 Ursächlich sind insbesondere die bereits schwache Grundkorrelation des Gradientsignals (Spearman $\rho = 0{,}09$) sowie die begrenzte Datenqualität durch Fehlwerte im Topologiekanal. 
 Folglich erzeugt \texttt{grad\_x\_v} überwiegend zusätzliches Rauschen, erhöht die multiplikative Komplexität des Eingangsraums und liefert keinen belastbaren statistischen Mehrwert gegenüber den Einzel-Features; der Kreuzterm wird daher strikt aus dem finalen State Space ausgeschlossen.
 
@@ -346,7 +346,7 @@ Insbesondere die Divergenz zwischen der Spearman-Korrelation und der \gls{MI} of
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=1\textwidth]{06_engineered_importance.png}
-    \caption{Vergleich der Feature-Wichtigkeit anhand dreier komplementärer Metriken. Die Divergenz zwischen Spearman-Korrelation und \gls{MI} offenbart rein nicht-lineare Zusammenhänge (z.\,B. bei \texttt{v\_roll\_std\_2s}).}
+    \caption[Vergleich der Feature-Wichtigkeit]{Vergleich der Feature-Wichtigkeit anhand dreier komplementärer Metriken. Die Divergenz zwischen Spearman-Korrelation und \gls{MI} offenbart rein nicht-lineare Zusammenhänge (z.\,B. bei \texttt{v\_roll\_std\_2s}).}
     \label{fig:engineered_importance}
 \end{figure}
 
@@ -377,7 +377,7 @@ Tabelle \ref{tab:final_features} bietet eine strukturierte Übersicht der finale
 
 \begin{table}[htbp]
     \centering
-    \caption{Übersicht des finalen Feature-Vektors für das Modelltraining.}
+    \caption[Finaler Feature-Vektor]{Übersicht des finalen Feature-Vektors für das Modelltraining.}
     \label{tab:final_features}
     \renewcommand{\arraystretch}{1.2}
     \begin{tabular}{|l|l|l|}
@@ -455,7 +455,7 @@ Fehlt dem Modell somit punktuell eine Sensorinformation, erhält es den neutrals
 
 Für das Feature \texttt{stop\_proximity} besitzt diese Entscheidung besondere Relevanz, da dessen Datenabdeckung lediglich bei rund 38\,\% liegt und in etwa 62\,\% der Zeitschritte kein explizites Distanzsignal vorliegt. 
 Die Nullimputation nach der Z-Score-Transformation ist in diesem Fall technisch konsistent, weil sie in Phasen ohne aktiven Haltepunkt den neutralen Erwartungswert einspeist und damit keine systematische Verzerrung der Gradientenupdates im Backpropagation-Prozess induziert. 
-Gleichzeitig ist diese Lücke fachlich nicht als reiner Datenfehler zu interpretieren, sondern als Abbild des Betriebszustands auf freier Strecke ohne unmittelbar bevorstehenden ATO-Halt. 
+Gleichzeitig ist diese Lücke fachlich nicht als reiner Datenfehler zu interpretieren, sondern als Abbild des Betriebszustands auf freier Strecke ohne unmittelbar bevorstehenden \gls{ATO}-Halt. 
 Kritisch bleibt jedoch, dass das Modell in diesen 62\,\% der Zeitpunkte Bremsentscheidungen nur aus sekundären Kinematik- und Limit-Signalen (insbesondere \texttt{V\_EST}, \texttt{V\_PERMITTED}, \texttt{A\_EST}) ableiten kann. 
 Damit verschiebt sich die Annäherungslogik an Halte- oder Restriktionspunkte implizit von einem kontinuierlichen Distanzhinweis auf indirekte Veränderungen der zulässigen Geschwindigkeit \texttt{V\_PERMITTED}, was eine strukturelle Limitation des Zustandsraums transparent macht.
 

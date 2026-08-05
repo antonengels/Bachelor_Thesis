@@ -1,15 +1,64 @@
 \section{Konzeption der Modellarchitektur}
+\label{ch:konzeption_modellarchitektur}
+
+Aufbauend auf der systematischen Transformation des unstrukturierten Rohdatensatzes in einen maschinenlesbaren Zustandsraum erfolgt in diesem Kapitel die informationstechnische Konzeption der neuronalen Modellarchitektur. 
+Das primäre methodische Ziel besteht in der Konstruktion einer Policy $\pi_\theta$, welche in der Lage ist, auf Basis historischer Zeitreihen einen kontinuierlichen Aktionsraum -- spezifisch die Leistungs- und Bremshebelstellung -- prädiktiv abzubilden. 
 
 \subsection{Auswahl und Begründung der Architektur}
-Dieses Kapitel stellt mögliche Netzwerkstrukturen fachlich gegenüber und begründet die finale Architekturwahl anhand der physikalischen Massenträgheit und der Sequenzlängen.
+\label{sec:auswahl_architektur}
 
-\subsection{Definition von State Space und Action Space}
+Um eine fundierte Entscheidung für die finale Modellstruktur zu treffen, wurde ein initiales experimentelles Setup aufgesetzt. 
+In dieser Evaluationsphase wurden ein \acrlongshort{MLP}, ein \acrlongshort{LSTM} sowie eine \acrlongshort{GRU} vergleichend trainiert und analysiert.
 
-\subsubsection{Strukturierung des State Vectors}
-Es erfolgt die mathematische Definition der formatierten Input-Features für jeden Zeitschritt.
+\subsubsection{Experimentelles Setup}
+Die initiale Trainingsphase wurde bewusst ohne Regularisierungsmaßnahmen wie Dropout oder Weight Decay (L2-Regularisierung) durchgeführt. 
+Dieses Vorgehen stellt sicher, dass das native Lernverhalten sowie die prinzipielle Eignung der Architekturtypen für die Verarbeitung fahrphysikalischer Zeitreihen isoliert betrachtet werden können. 
+Für eine effiziente Evaluation wurde das Training auf 20\,\% des Gesamtdatensatzes limitiert und über 10 Epochen mit einer Batch-Size von 256 sowie einer Learning Rate von 0.001 ausgeführt. 
+Das Eingangsfenster umfasste 100 Zeitschritte ($H=100$), was physikalisch 20 Sekunden an historischen Daten entspricht, um einen Vorhersagehorizont von 50 Zeitschritten (10 Sekunden) zu prädizieren.
 
-\subsubsection{Kontinuierlicher Action Space}
-Die Modellausgabe wird als kontinuierlicher Wert für den Leistungs- und Bremshebel spezifiziert.
+Die Auswertung des Feedforward-Netzwerkes verdeutlicht die theoretischen Limitationen dieser Architektur. 
+Mit 110.849 trainierbaren Parametern wies das \gls{MLP} die massivste Überdimensionierung im Testfeld auf und erreichte konsequenterweise den geringsten Trainingsfehler (siehe Abbildung \ref{fig:training_loss_comparison}). 
+Auf den ungesehenen Evaluierungsdaten versagte das Modell jedoch: 
+Der Validierungs-\gls{RMSE} lag bei 0.2297 (\gls{MAE} = 0.1476), und das Bestimmtheitsmaß auf dem Test-Set fiel auf ein $R^2$ von lediglich 0.0467 bei einer Richtungs-Accuracy von 47,52\,\% und einer Toleranz-Accuracy von 70,57\,\%. 
+
+Aus maschineller Lernperspektive handelt es sich hierbei um ein klassisches Phänomen der extremen Überanpassung (Overfitting). 
+Wie in den theoretischen Grundlagen hergeleitet, besitzen Feedforward-Netze keinen internen Zustand (Hidden State) und verarbeiten Eingaben rein statisch. 
+Sie sind nicht in der Lage, zeitliche Kausalitäten -- wie die immense physikalische Trägheit eines Zuges -- zu erfassen. 
+Das \gls{MLP} nutzt seine enorme Parameteranzahl folglich ausschließlich zur reinen Memorization (Auswendiglernen) der Trainingsdaten. 
+Sobald das Modell auf ungesehene Evaluierungsdaten trifft, fehlt ihm das temporale Verständnis, was zu einer Explosion des Validierungs-Losses führt.
+
+Im direkten Kontrast dazu demonstrierten die rekurrenten Architekturen eine deutliche Überlegenheit. 
+Das \gls{LSTM} (19.009 Parameter) erzielte ein Test-$R^2$ von 0.1030 bei einem \gls{RMSE} von 0.1550 und einem \gls{MAE} von 0.0898. 
+Die Richtungs-Accuracy stieg auf 60,95\,\% (Toleranz-Accuracy: 73,55\,\%). 
+Die \gls{GRU} (14.273 Parameter) lieferte ähnliche, minimal schwächere Metriken mit einem Test-$R^2$ von 0.0854 (\gls{RMSE} = 0.1565, \gls{MAE} = 0.0864) und einer Richtungs-Accuracy von 60,85\,\%.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{loss_comparison.png}
+    \caption[Trainings- und Validierungsverluste]{Vergleich der Trainings- und Validierungsverluste der evaluierten Basis-Architekturen zur Visualisierung des architekturabhängigen Lernverhaltens.}
+    \label{fig:training_loss_comparison}
+\end{figure}
+
+Diese Ergebnisse belegen die Theorie: 
+\gls{LSTM} und \gls{GRU} glänzen, da sie exakt für derartige hochgradig sequenzielle Aufgaben entworfen wurden. 
+Durch ihre rekurrente Architektur und die spezialisierten Gating-Mechanismen (wie den Cell State beim \gls{LSTM}) können sie historische Abhängigkeiten über das gesamte 20-sekündige Eingangsfenster aggregieren. 
+Das Modell begreift mathematisch, dass ein aktuelles Bremsmanöver kausal mit infrastrukturellen oder physikalischen Signalen aus der Vergangenheit zusammenhängt.
+
+Ein wissenschaftlich interessantes Phänomen zeigte sich zudem bei den Trainingszeiten. 
+Aus informationstheoretischer Sicht sollte die \gls{GRU} recheneffizienter agieren, da sie durch die Einsparung von Gates mit lediglich 14.273 Parametern deutlich schlanker ist als das \gls{LSTM} (19.009 Parameter). 
+Dennoch beanspruchte das Training der \gls{GRU} 654,8 Sekunden, während das \gls{LSTM} bereits nach 399,7 Sekunden konvergierte.
+
+Diese Laufzeit-Anomalie lässt sich durch die zugrundeliegende Software-Architektur erklären. 
+In etablierten Deep-Learning-Frameworks wie PyTorch wurden die Implementierungen von \gls{LSTM}-Zellen über Jahre hinweg auf Hardware- und C++-Ebene extrem stark optimiert. 
+Die internen Matrixmultiplikationen der \gls{LSTM}-Zellen lassen sich oftmals effizienter parallelisieren als die strikt sequenziellen Update-Schritte der \gls{GRU}. 
+Diese hochgradige Software-Optimierung überwiegt in der Praxis den theoretischen Rechenvorteil der geringeren Parameterzahl bei Weitem.
+
+\subsubsection{Fazit der Architekturauswahl}
+
+Unter Berücksichtigung der fundamentalen Anforderungen an die Generalisierungsfähigkeit fällt die finale Entscheidung -- trotz des minimal stärkeren Test-$R^2$ des \glsentryshort{LSTM}s im initialen Setup -- auf die \gls{GRU}-Architektur. 
+Aus maschineller Lernperspektive bietet die \gls{GRU} durch ihre reduzierte Parameterzahl einen entscheidenden strukturellen Vorteil: Eine geringere Modellkapazität verringert nativ die Anfälligkeit für Overfitting und zwingt das Netzwerk dazu, robustere, abstrahierte Repräsentationen der Fahrphysik zu erlernen. 
+Der im Vorfeld identifizierte Laufzeitnachteil der \gls{GRU}, welcher auf PyTorch-spezifische Implementierungsdetails zurückzuführen ist, ist für den weiteren Projektverlauf zu vernachlässigen, da das finale und rechenintensive Modelltraining ohnehin auf einer deutlich leistungsstärkeren Hardware-Infrastruktur durchgeführt wird. 
+Da jedoch auch die \gls{GRU} als unregularisiertes Basis-Modell nicht vollständig immun gegen das Auswendiglernen von Trajektorien ist, ist die Definition und Implementierung fundierter Regularisierungsstrategien für die Konstruktion der finalen Policy zwingend erforderlich.
 
 \subsection{Loss-Funktion und Optimizer}
 Dieser Abschnitt legt die mathematische Metrik zur Bewertung der Modellvorhersagen fest und begründet die Wahl robuster Regression-Losses (z.B. Huber Loss) gegenüber Ausreißern in Sensordaten.
@@ -17,5 +66,3 @@ Dieser Abschnitt legt die mathematische Metrik zur Bewertung der Modellvorhersag
 \subsection{Strategie zur netzinternen Regularisierung}
 Es werden die architektonischen Entscheidungen zur Overfitting-Prävention dokumentiert sowie die Platzierung und Konfiguration der gewählten Regularisierungs-Layer erklärt.
 
-\subsection{Schnittstelle für RL (Warm-Start)}
-Dieses Kapitel beschreibt konzeptionell die Weiternutzung des trainierten \gls{BC}-Modells als Policy Initialization für einen späteren \gls{RL}-Agenten.

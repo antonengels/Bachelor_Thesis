@@ -83,11 +83,11 @@ Das primäre Ziel während des Trainings ist es, eine Policy $\pi_\theta$ zu fin
 \label{sec:covariate_shift}
 
 Obwohl sich \gls{BC} mathematisch als \gls{SL} formulieren lässt, birgt die Anwendung auf sequentielle Entscheidungsprozesse wie die Zugsteuerung ein fundamentales Problem. 
-Klassische statistische Lernansätze basieren auf der Annahme, dass die Trainings- und Testdaten unabhängig und identisch verteilt sind (i.i.d.-Annahme). 
-Beim \gls{BC} wird diese Annahme jedoch systematisch gebrochen, da die Vorhersage des Lernenden zukünftige Eingangsbeobachtungen/Zustände während der Ausführung der gelernten Policy beeinflusst und damit die entscheidende i.i.d.-Annahme verletzt \cite[vgl.~S.~1]{chap2_Ros10}.
+Klassische statistische Lernansätze basieren auf der Annahme, dass die Trainings- und Testdaten unabhängig und identisch verteilt sind (\gls{IID}-Annahme). 
+Beim \gls{BC} wird diese Annahme jedoch systematisch gebrochen, da die Vorhersage des Lernenden zukünftige Eingangsbeobachtungen/Zustände während der Ausführung der gelernten Policy beeinflusst und damit die entscheidende \gls{IID}-Annahme verletzt \cite[vgl.~S.~1]{chap2_Ros10}.
 
 In der Trainingsphase optimiert das Modell seine Parameter lediglich auf Basis der vorgegebenen Expertentrajektorien. 
-Während des Einsatzes agieren Policies jedoch sequenziell im geschlossenen Regelkreis (Closed-Loop), wobei jede Entscheidung zukünftige Beobachtungen beeinflusst und die IID-Annahme damit nicht mehr gilt \cite[vgl.~S.~3]{chap2_Kar25}.
+Während des Einsatzes agieren Policies jedoch sequenziell im geschlossenen Regelkreis (Closed-Loop), wobei jede Entscheidung zukünftige Beobachtungen beeinflusst und die \gls{IID}-Annahme damit nicht mehr gilt \cite[vgl.~S.~3]{chap2_Kar25}.
 Diese Diskrepanz zwischen Trainings- und Inferenzzeit führt zum zentralen Problem des Behavior Cloning: 
 
 Covariate Shift (auch Distribution Shift genannt) bezeichnet im vorliegenden Kontext die Verteilungsverschiebung zwischen Trainings- und Einsatzphase, bei der die Eingangsverteilungen divergieren, während die bedingte Zuordnung formal unverändert bleibt: 
@@ -117,7 +117,7 @@ Diese Modelle werden als Feedforward bezeichnet, da die Informationen durch die 
 
 Feedforward-Netzwerke verarbeiten Eingabedaten streng direktional. 
 Da sie folglich keinen internen Zustand oder ein Gedächtnis aufbauen können, mappen sie Eingaben lediglich statisch auf Ausgaben. 
-MLP können nicht aus Sequenzinformationen von Daten lernen; der Kontext geht dabei verloren \cite[vgl.~S.~3]{chap2_Ife23}.
+\glspl{MLP} können nicht aus Sequenzinformationen von Daten lernen; der Kontext geht dabei verloren \cite[vgl.~S.~3]{chap2_Ife23}.
 
 Für die Modellierung von Fahrverhalten ist diese fundamentale Amnesie kritisch. 
 Zwar punkten \gls{MLP} durch eine sehr einfache Architektur, schnelles Training und leichte Implementierbarkeit, jedoch fehlt ihnen jeglicher temporale Kontext. 
@@ -130,9 +130,8 @@ Beim \gls{BC} führt dieses fehlende Verständnis für zeitliche Kausalitäten s
 
 \begin{figure}[htbp]
     \centering
-    % Erzeugt einen grauen Kasten als Platzhalter (Breite: 80% der Textbreite, Höhe: 5cm)
-    \textcolor{gray}{\rule{0.8\textwidth}{5cm}} 
-    \caption{Schematische Darstellung eines MLP mit direktionalem Informationsfluss ohne rekurrente Rückkopplungen.}
+    \includegraphics[width=0.8\textwidth]{MLP.png}
+    \caption[MLP-Architektur]{Schematische Darstellung eines \gls{MLP} mit direktionalem Informationsfluss ohne rekurrente Rückkopplungen \cite{MLP}.}
     \label{fig:mlp}
 \end{figure}
 
@@ -152,8 +151,8 @@ Es vergisst die frühe, aber maßgebliche Information, bevor der Zug den eigentl
 
 \begin{figure}[htbp]
     \centering
-    \textcolor{gray}{\rule{0.8\textwidth}{5cm}}
-    \caption{Architektur eines RNN mit der Rückkopplungsschleife des Hidden States über die Zeit.}
+    \includegraphics[width=0.6\textwidth]{RNN.png}
+    \caption[RNN-Architektur]{Architektur eines \gls{RNN} mit der Rückkopplungsschleife des Hidden States über die Zeit \cite{RNN}.}
     \label{fig:rnn}
 \end{figure}
 
@@ -176,8 +175,8 @@ Der signifikante Nachteil liegt in der Rechenintensität: Die Architektur ist du
 
 \begin{figure}[htbp]
     \centering
-    \textcolor{gray}{\rule{0.8\textwidth}{5cm}}
-    \caption{Aufbau einer LSTM Zelle mit Forget, Input und Output Gate sowie dem zentralen Cell State.}
+    \includegraphics[width=0.6\textwidth]{LSTM.png}
+    \caption[LSTM-Zellstruktur]{Aufbau einer \gls{LSTM}-Zelle mit Forget, Input und Output Gate sowie dem zentralen Cell State \cite{RNN}.}
     \label{fig:lstm}
 \end{figure}
 
@@ -197,8 +196,8 @@ Lediglich bei extrem komplexen, überlangen Sequenzen kann die Prädiktionsgüte
 
 \begin{figure}[htbp]
     \centering
-    \textcolor{gray}{\rule{0.8\textwidth}{5cm}}
-    \caption{Struktur einer GRU, welche den internen Zustand mit lediglich einem Reset- und Update-Gate reguliert.}
+    \includegraphics[width=0.6\textwidth]{GRU.png}
+    \caption[GRU-Architektur]{Struktur einer \gls{GRU}, welche den internen Zustand mit lediglich einem Reset- und Update-Gate reguliert \cite{RNN}.}
     \label{fig:gru}
 \end{figure}
 

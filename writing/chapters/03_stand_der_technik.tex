@@ -63,9 +63,9 @@ Insbesondere oszilliert das Stellsignal \texttt{M\_ATO\_RTBRq} dann zwischen Zug
 Solche Aktionsfolgen erzeugen ineffiziente Trajektorien, erhöhen die Zahl unproduktiver Übergänge und verschlechtern zugleich die Sicherheitsmarge, da der Lernprozess große Teile seines Budgets auf die Korrektur trivialisierbarer Initialfehler verwendet.
 
 Algorithmisch folgt daraus die Notwendigkeit eines Warm-Starts über Offline-Imitation-Learning. 
-Beim Behavior Cloning wird eine initiale Policy $\pi_{\theta_0}$ per Supervised Learning auf Expertendemonstrationen über den definierten physikalischen Feature-Vektor trainiert, sodass bereits vor der RL-Phase eine stabile Näherung von $\pi_{expert}(a\mid s)$ vorliegt. 
+Beim Behavior Cloning wird eine initiale Policy $\pi_{\theta_0}$ per Supervised Learning auf Expertendemonstrationen über den definierten physikalischen Feature-Vektor trainiert, sodass bereits vor der \gls{RL}-Phase eine stabile Näherung von $\pi_{expert}(a\mid s)$ vorliegt. 
 Formal entspricht dies einer Initialisierung der Parameter in einer günstigen Region des Parameterraums $\Theta$, also $\theta_0 \in \Theta_{expert}\subset\Theta$, in der die Policy-Divergenz zur Expertenstrategie klein ist. 
-Die nachfolgende RL-Feinjustierung optimiert damit nicht mehr aus dem Zufallsraum heraus, sondern startet aus einer dynamisch plausiblen Basis, wodurch die effektive Suchraumgröße, die Zahl sicherheitskritischer Explorationsschritte und damit die benötigte Stichprobenzahl signifikant reduziert werden \cite[vgl.~S.~1]{chap1_Wexler22}; \cite[S.~5042]{chap1_Silva19}.
+Die nachfolgende \gls{RL}-Feinjustierung optimiert damit nicht mehr aus dem Zufallsraum heraus, sondern startet aus einer dynamisch plausiblen Basis, wodurch die effektive Suchraumgröße, die Zahl sicherheitskritischer Explorationsschritte und damit die benötigte Stichprobenzahl signifikant reduziert werden \cite[vgl.~S.~1]{chap1_Wexler22}; \cite[S.~5042]{chap1_Silva19}.
 
  \subsection{Imitation Learning im Verkehrswesen}
 \label{sec:imitation_learning}
