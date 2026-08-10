@@ -4,7 +4,7 @@
 Aufbauend auf der systematischen Transformation des unstrukturierten Rohdatensatzes in einen maschinenlesbaren Zustandsraum erfolgt in diesem Kapitel die informationstechnische Konzeption der neuronalen Modellarchitektur. 
 Das primäre methodische Ziel besteht in der Konstruktion einer Policy $\pi_\theta$, welche in der Lage ist, auf Basis historischer Zeitreihen einen kontinuierlichen Aktionsraum -- spezifisch die Leistungs- und Bremshebelstellung -- prädiktiv abzubilden. 
 
-\subsection{Auswahl und Begründung der Architektur}
+\subsection{Auswahlder Architektur}
 \label{sec:auswahl_architektur}
 
 Um eine fundierte Entscheidung für die finale Modellstruktur zu treffen, wurde ein initiales experimentelles Setup aufgesetzt. 
@@ -60,9 +60,56 @@ Aus maschineller Lernperspektive bietet die \gls{GRU} durch ihre reduzierte Para
 Der im Vorfeld identifizierte Laufzeitnachteil der \gls{GRU}, welcher auf PyTorch-spezifische Implementierungsdetails zurückzuführen ist, ist für den weiteren Projektverlauf zu vernachlässigen, da das finale und rechenintensive Modelltraining ohnehin auf einer deutlich leistungsstärkeren Hardware-Infrastruktur durchgeführt wird. 
 Da jedoch auch die \gls{GRU} als unregularisiertes Basis-Modell nicht vollständig immun gegen das Auswendiglernen von Trajektorien ist, ist die Definition und Implementierung fundierter Regularisierungsstrategien für die Konstruktion der finalen Policy zwingend erforderlich.
 
-\subsection{Loss-Funktion und Optimizer}
-Dieser Abschnitt legt die mathematische Metrik zur Bewertung der Modellvorhersagen fest und begründet die Wahl robuster Regression-Losses (z.B. Huber Loss) gegenüber Ausreißern in Sensordaten.
+\subsection{Dimensionierung des Netzwerks}
+\label{subsec:dimensionierung_netzwerk}
 
-\subsection{Strategie zur netzinternen Regularisierung}
-Es werden die architektonischen Entscheidungen zur Overfitting-Prävention dokumentiert sowie die Platzierung und Konfiguration der gewählten Regularisierungs-Layer erklärt.
+Die Dimensionierung eines neuronalen Netzes unterliegt einem fundamentalen informationstheoretischen Dilemma: 
+Eine zu geringe Modellkapazität bedingt Underfitting, wodurch die komplexe Zugdynamik nicht ausreichend abgebildet werden kann. 
+Eine zu große Architektur neigt hingegen -- insbesondere bei verrauschten realen Sensordaten -- zu starkem Overfitting, da das Modell den Trainingsdatensatz auswendig lernt (Memorization) und seine Generalisierungsfähigkeit einbüßt. 
+Um das optimale Gleichgewicht empirisch zu ermitteln, wurde ein Brute-Force-Grid-Search-Verfahren implementiert. 
+Hierbei wurden 39 permutationsfähige Architekturen des ausgewählten \gls{GRU}-Modells mit einer Tiefe von ein bis drei Hidden Layern und Breiten von 64, 96 sowie 128 Neuronen unter identischen Bedingungen (10 Epochen, Batch-Size 128, Learning Rate 0.001) trainiert. 
+Als finale Entscheidungsmetrik diente der \acrlongshort{MSE} auf dem isolierten Test-Datensatz.
+
+Die empirische Evaluation der Single-Layer-Architekturen offenbarte das schlechteste Leistungsniveau. 
+Dies belegt, dass ein einzelner rekurrenter Layer nicht über die notwendige Repräsentationskapazität verfügt, um die hochdimensionalen Abstraktionen zwischen Streckentopologie, Kinematik und resultierender Hebelstellung über das definierte Zeitfenster ($H=30$) zu erlernen. 
+Eine Erhöhung der Tiefe auf drei Hidden Layer (mit bis zu 251.265 Parametern) verschlechterte die Prädiktionsgüte jedoch massiv. 
+Diese tiefen Modelle unterliegen starkem Overfitting, da sie aufgrund der enormen Parameterzahl streckenspezifische Eigenheiten und Sensorrauschen memorieren, anstatt die kausale Fahrphysik zu generalisieren.
+
+Das globale Optimum des Experiments verortet sich in den 2-Layer-Architekturen, welche im Durchschnitt den geringsten Test-Fehler (0.0205) aufweisen. 
+Als beste Einzelkonfiguration kristallisierte sich ein Netzwerk mit 96 Neuronen im ersten und 64 Neuronen im zweiten Hidden Layer heraus (Test-\gls{MSE}: 0.0197 bei 61.697 Parametern). 
+Das finale Modell für das \gls{BC} wird folglich als 2-Layer-\gls{GRU} mit dieser asymmetrischen Trichterstruktur (Funnel-Design) dimensioniert. 
+Dieses Layout ist konzeptionell äußerst vorteilhaft: Der breitere erste Layer extrahiert komplexe, hochfrequente zeitliche Kausalitäten aus dem acht-dimensionalen Input-Strom. 
+Der darauffolgende, schmalere Layer agiert als ,,Information Bottleneck''. 
+Er zwingt das Modell, die extrahierten Informationen auf die essenziellen physikalischen Treiber zu komprimieren, bevor die finale Vorhersageschicht den kontinuierlichen Stellwert generiert. 
+Dieses Design bietet das ideale Verhältnis aus Repräsentationskapazität und inhärenter Regularisierung.
+
+\subsection{Loss-Funktion und Optimizer}
+\label{subsec:loss_und_optimizer}
+
+Die finale Prädiktionsgüte der neu ausgewählten 2-Layer-\gls{GRU}-Architektur (96-64 Neuronen) wird im hochdimensionalen Parameterraum maßgeblich von der mathematischen Fehlerbewertung (Verlustfunktion) sowie der algorithmischen Optimierungsstrategie determiniert. 
+Um die optimale Konfiguration für diese tiefe Netzwerkstruktur zu ermitteln, wurde eine erneute systematische Grid-Search-Evaluation auf dem Test-Datensatz durchgeführt. 
+Hierbei wurden etablierte Regressions-Losses (\gls{MSE}, \gls{MAE}, Huber, Log-Cosh, Smooth L1) in Kombination mit klassischen und adaptiven Optimizern (\gls{SGD}, \gls{Adam}, \gls{AdamW}, \gls{RMSprop}, \gls{Adagrad}) getestet. 
+Das Training erfolgte analog zur initialen Architekturauswahl rein auf Basis der unregularisierten \gls{GRU} über 10 Epochen und auf 20\,\% des Gesamtdatensatzes, um die Performance-Unterschiede der Algorithmen isoliert und datengetrieben bewerten zu können.
+
+Die empirischen Ergebnisse dieser Evaluation sind in Form einer Heatmap in Abbildung \ref{fig:loss_optimizer_heatmap} visualisiert. 
+Die spaltenweise Analyse der Verlustfunktionen zeigt, dass der Huber-Loss im aggregierten Durchschnitt über alle Optimizer hinweg die höchste Stabilität und den besten mittleren Test-\gls{MSE} (0.0247) aufweist. 
+Dennoch liefert der klassische Standard-\gls{MSE} in Kombination mit dem \gls{Adam}-Optimizer den absolut geringsten Einzel-Fehlerwert des gesamten Experiments (Test-\gls{MSE} von 0.0236). 
+Klassische Fehlerfunktionen zeigen sich ansonsten anfälliger für die Wahl des Optimizers, wie die deutlichen Schwankungen in der Matrix belegen.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{heatmap_test_mse.png}
+    \caption{Heatmap der Test-\gls{MSE}-Werte für die systematische Grid-Search-Evaluation unterschiedlicher Loss-Funktionen und Optimizer-Strategien auf Basis der unregularisierten 2-Layer-\gls{GRU}-Architektur.}
+    \label{fig:loss_optimizer_heatmap}
+\end{figure}
+
+Die zeilenweise Auswertung der Optimierungsalgorithmen offenbart ein noch prägnanteres Leistungsgefälle. Das klassische Stochastische Gradientenabstieg-Verfahren (\gls{SGD}) versagt in diesem Setup unabhängig von der gewählten Loss-Funktion komplett und weist die signifikant schlechteste Generalisierung auf (dunkelviolette Zeile mit Werten von bis zu 0.0279 beim \gls{MSE}). 
+Adaptive Algorithmen dominieren das Feld sichtbar und stabilisieren das Training auf einem durchgehend höheren Niveau. 
+\gls{Adagrad} besticht dabei durch eine enorme Konstanz über alle Fehlerfunktionen hinweg und erzielt den besten mittleren Test-\gls{MSE} der Optimizer-Familien (0.0241). 
+\gls{RMSprop} zeigt mit \gls{MAE} und Log-Cosh (jeweils unter 0.0240) ebenfalls extrem starke Resultate. 
+Dennoch erreicht die \gls{Adam}-Variante in der Spitze das absolute globale Optimum.
+
+Basierend auf dieser direkten Auswertung der Heatmap wird das finale \gls{BC}-Modell mit dem \gls{Adam}-Optimizer und dem \gls{MSE}-Loss kompiliert. 
+Diese Konfiguration stellt empirisch belegt die maximale Vorhersagegüte für die nun tiefer dimensionierte Netzwerkstruktur sicher.
+
 
