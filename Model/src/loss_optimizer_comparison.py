@@ -7,7 +7,7 @@ Idee:
     Optimizer x Loss-Funktion.
 
 Ziel:
-    - Kombinations-Ranking nach Validierungs-MSE
+    - Kombinations-Ranking nach Test-MSE
     - Aggregierte Rankings je Optimizer und je Loss-Funktion
     - Self-contained HTML-Report mit Plots (base64)
 
@@ -15,14 +15,15 @@ Beispiel:
     .\.venv\Scripts\python.exe src\gru_loss_optimizer_comparison.py
 
 Optionen wie beim Architekturvergleich:
-    --full --fraction --epochs --seq-len --horizon --stride --batch-size --hidden
+    --full --fraction --epochs --seq-len --horizon --stride --batch-size
     --lr --seed --max-*-trips --max-*-windows
 
 Neue Optionen:
+    --gru-architecture 96,64
     --optimizers adam,adamw,rmsprop,sgd,adagrad
     --losses mse,mae,smooth_l1,huber,log_cosh
-    --sort-desc      (Plot-Sortierung absteigend nach Val-MSE; Default)
-    --sort-asc       (Plot-Sortierung aufsteigend nach Val-MSE)
+    --sort-desc      (Plot-Sortierung absteigend nach Test-MSE; Default)
+    --sort-asc       (Plot-Sortierung aufsteigend nach Test-MSE)
 """
 
 from __future__ import annotations
@@ -49,7 +50,6 @@ from torch.utils.data import DataLoader
 
 from model_comparison import (
     FEATURES,
-    GRURegressor,
     SequenceDataset,
     build_trip_arrays,
     cap_dataset,
@@ -74,7 +74,7 @@ class Config:
     fraction: float = 0.20
     epochs: int = 10
     batch_size: int = 256
-    hidden: int = 64
+    gru_architecture: tuple[int, ...] = (96, 64)
     lr: float = 1e-3
     seed: int = 42
     max_train_trips: int | None = None
@@ -133,6 +133,31 @@ class LogCoshLoss(nn.Module):
         x = pred - target
         # log(cosh(x)) = x + softplus(-2x) - log(2)
         return torch.mean(x + F.softplus(-2.0 * x) - math.log(2.0))
+
+
+class VariableGRURegressor(nn.Module):
+    """Stack aus 1-layer-GRUs fuer unterschiedliche Hidden-Sizes pro Layer."""
+
+    def __init__(self, n_features: int, hidden_sizes: tuple[int, ...]):
+        super().__init__()
+        if not hidden_sizes:
+            raise ValueError("gru_architecture darf nicht leer sein")
+
+        layers = []
+        in_size = n_features
+        for h in hidden_sizes:
+            layers.append(nn.GRU(in_size, h, num_layers=1, batch_first=True))
+            in_size = h
+
+        self.layers = nn.ModuleList(layers)
+        self.head = nn.Linear(hidden_sizes[-1], 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        out = x
+        for gru in self.layers:
+            out, _ = gru(out)
+        last = out[:, -1, :]
+        return torch.tanh(self.head(last)).squeeze(-1)
 
 
 def count_params(model: nn.Module) -> int:
@@ -225,7 +250,7 @@ def train_one_combo(
     torch.manual_seed(cfg.seed)
     np.random.seed(cfg.seed)
 
-    model = GRURegressor(len(FEATURES), cfg.hidden).to(device)
+    model = VariableGRURegressor(len(FEATURES), cfg.gru_architecture).to(device)
     objective_fn = build_loss(loss_name, cfg)
     optimizer = build_optimizer(optimizer_name, model.parameters(), cfg)
     combo_name = f"{optimizer_name.upper()} + {loss_name}"
@@ -285,8 +310,8 @@ def fig_to_b64(fig) -> str:
     return base64.b64encode(buf.read()).decode("ascii")
 
 
-def sorted_results_by_val_mse(results: list[ComboResult], desc: bool) -> list[ComboResult]:
-    return sorted(results, key=lambda r: r.metrics["mse"], reverse=desc)
+def sorted_results_by_test_mse(results: list[ComboResult], desc: bool) -> list[ComboResult]:
+    return sorted(results, key=lambda r: r.test_metrics["mse"], reverse=desc)
 
 
 def color_map_for_losses(losses: list[str]) -> dict[str, str]:
@@ -296,18 +321,18 @@ def color_map_for_losses(losses: list[str]) -> dict[str, str]:
 
 
 def plot_combo_ranking(results: list[ComboResult], sort_desc: bool) -> str:
-    ordered = sorted_results_by_val_mse(results, desc=sort_desc)
+    ordered = sorted_results_by_test_mse(results, desc=sort_desc)
     labels = [r.combo_name for r in ordered]
-    vals = [r.metrics["mse"] for r in ordered]
+    vals = [r.test_metrics["mse"] for r in ordered]
     loss_colors = color_map_for_losses([r.loss_name for r in ordered])
     colors = [loss_colors[r.loss_name] for r in ordered]
 
     fig, ax = plt.subplots(figsize=(12, max(4, 0.38 * len(ordered))))
     bars = ax.barh(labels, vals, color=colors)
     ax.invert_yaxis()
-    ax.set_xlabel("Validierungs-MSE")
+    ax.set_xlabel("Test-MSE")
     ax.set_title(
-        "GRU-Kombinationen sortiert nach Val-MSE "
+        "GRU-Kombinationen sortiert nach Test-MSE "
         f"({'absteigend' if sort_desc else 'aufsteigend'})"
     )
     ax.grid(alpha=0.3, axis="x")
@@ -342,27 +367,29 @@ def _aggregate_by_key(results: list[ComboResult], key: str) -> pd.DataFrame:
             median_val_mse=("val_mse", "median"),
             best_val_mse=("val_mse", "min"),
             mean_test_mse=("test_mse", "mean"),
+            median_test_mse=("test_mse", "median"),
+            best_test_mse=("test_mse", "min"),
             mean_train_time_s=("train_time_s", "mean"),
-            n_runs=("val_mse", "count"),
+            n_runs=("test_mse", "count"),
         )
-        .sort_values("mean_val_mse", ascending=True)
+        .sort_values("mean_test_mse", ascending=True)
     )
     return grp
 
 
 def plot_optimizer_ranking(results: list[ComboResult], sort_desc: bool) -> str:
     df = _aggregate_by_key(results, "optimizer_name")
-    df = df.sort_values("mean_val_mse", ascending=not sort_desc)
+    df = df.sort_values("mean_test_mse", ascending=not sort_desc)
 
     fig, ax = plt.subplots(figsize=(8.5, 4.2))
-    bars = ax.bar(df["optimizer_name"], df["mean_val_mse"], color="#4C72B0")
+    bars = ax.bar(df["optimizer_name"], df["mean_test_mse"], color="#4C72B0")
     ax.set_title(
-        "Optimizer-Ranking (Mittelwert Val-MSE ueber alle Losses) "
+        "Optimizer-Ranking (Mittelwert Test-MSE ueber alle Losses) "
         f"({'absteigend' if sort_desc else 'aufsteigend'})"
     )
-    ax.set_ylabel("mean(Val-MSE)")
+    ax.set_ylabel("mean(Test-MSE)")
     ax.grid(alpha=0.3, axis="y")
-    for b, v in zip(bars, df["mean_val_mse"]):
+    for b, v in zip(bars, df["mean_test_mse"]):
         ax.text(b.get_x() + b.get_width() / 2, v, f"{v:.5f}", ha="center", va="bottom", fontsize=8)
     fig.tight_layout()
     return fig_to_b64(fig)
@@ -370,17 +397,17 @@ def plot_optimizer_ranking(results: list[ComboResult], sort_desc: bool) -> str:
 
 def plot_loss_ranking(results: list[ComboResult], sort_desc: bool) -> str:
     df = _aggregate_by_key(results, "loss_name")
-    df = df.sort_values("mean_val_mse", ascending=not sort_desc)
+    df = df.sort_values("mean_test_mse", ascending=not sort_desc)
 
     fig, ax = plt.subplots(figsize=(8.5, 4.2))
-    bars = ax.bar(df["loss_name"], df["mean_val_mse"], color="#55A868")
+    bars = ax.bar(df["loss_name"], df["mean_test_mse"], color="#55A868")
     ax.set_title(
-        "Loss-Ranking (Mittelwert Val-MSE ueber alle Optimizer) "
+        "Loss-Ranking (Mittelwert Test-MSE ueber alle Optimizer) "
         f"({'absteigend' if sort_desc else 'aufsteigend'})"
     )
-    ax.set_ylabel("mean(Val-MSE)")
+    ax.set_ylabel("mean(Test-MSE)")
     ax.grid(alpha=0.3, axis="y")
-    for b, v in zip(bars, df["mean_val_mse"]):
+    for b, v in zip(bars, df["mean_test_mse"]):
         ax.text(b.get_x() + b.get_width() / 2, v, f"{v:.5f}", ha="center", va="bottom", fontsize=8)
     fig.tight_layout()
     return fig_to_b64(fig)
@@ -394,7 +421,7 @@ def plot_heatmap(results: list[ComboResult]) -> str:
     pos_opt = {o: i for i, o in enumerate(opts)}
     pos_loss = {l: j for j, l in enumerate(losses)}
     for r in results:
-        mat[pos_opt[r.optimizer_name], pos_loss[r.loss_name]] = r.metrics["mse"]
+        mat[pos_opt[r.optimizer_name], pos_loss[r.loss_name]] = r.test_metrics["mse"]
 
     fig, ax = plt.subplots(figsize=(1.8 * len(losses) + 1.5, 0.8 * len(opts) + 2.2))
     im = ax.imshow(mat, aspect="auto", cmap="viridis_r")
@@ -402,7 +429,7 @@ def plot_heatmap(results: list[ComboResult]) -> str:
     ax.set_yticks(np.arange(len(opts)))
     ax.set_xticklabels(losses, rotation=30, ha="right")
     ax.set_yticklabels(opts)
-    ax.set_title("Val-MSE Heatmap (Optimizer x Loss)")
+    ax.set_title("Test-MSE Heatmap (Optimizer x Loss)")
 
     for i in range(len(opts)):
         for j in range(len(losses)):
@@ -410,14 +437,14 @@ def plot_heatmap(results: list[ComboResult]) -> str:
                 ax.text(j, i, f"{mat[i, j]:.4f}", ha="center", va="center", color="white", fontsize=8)
 
     cbar = fig.colorbar(im, ax=ax)
-    cbar.set_label("Val-MSE")
+    cbar.set_label("Test-MSE")
     fig.tight_layout()
     return fig_to_b64(fig)
 
 
 def plot_loss_curves(results: list[ComboResult], top_k: int = 12) -> str:
-    # Fuer Lesbarkeit nur beste top_k nach Val-MSE zeigen.
-    ordered = sorted(results, key=lambda r: r.metrics["mse"])[:max(1, top_k)]
+    # Fuer Lesbarkeit nur beste top_k nach Test-MSE zeigen.
+    ordered = sorted(results, key=lambda r: r.test_metrics["mse"])[:max(1, top_k)]
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.2))
 
     for res in ordered:
@@ -452,13 +479,13 @@ def build_report(
         "curves": plot_loss_curves(results, cfg.top_loss_curves),
     }
 
-    ranked = sorted(results, key=lambda r: r.metrics["mse"])  # best first
+    ranked = sorted(results, key=lambda r: r.test_metrics["mse"])  # best first
     best = ranked[0]
     best_loss_name = (
-        _aggregate_by_key(results, "loss_name").sort_values("mean_val_mse", ascending=True).iloc[0]["loss_name"]
+        _aggregate_by_key(results, "loss_name").sort_values("mean_test_mse", ascending=True).iloc[0]["loss_name"]
     )
     best_opt_name = (
-        _aggregate_by_key(results, "optimizer_name").sort_values("mean_val_mse", ascending=True).iloc[0][
+        _aggregate_by_key(results, "optimizer_name").sort_values("mean_test_mse", ascending=True).iloc[0][
             "optimizer_name"
         ]
     )
@@ -490,18 +517,18 @@ def build_report(
         out = [
             "<table>",
             "<tr>"
-            f"<th>{title_col}</th><th>mean Val-MSE</th><th>median Val-MSE</th>"
-            "<th>best Val-MSE</th><th>mean Test-MSE</th><th>mean Trainingszeit</th><th>Runs</th>"
+            f"<th>{title_col}</th><th>mean Test-MSE</th><th>median Test-MSE</th>"
+            "<th>best Test-MSE</th><th>mean Val-MSE</th><th>mean Trainingszeit</th><th>Runs</th>"
             "</tr>",
         ]
         for _, row in df.iterrows():
             out.append(
                 "<tr>"
                 f"<td>{row[title_col]}</td>"
-                f"<td>{row['mean_val_mse']:.6f}</td>"
-                f"<td>{row['median_val_mse']:.6f}</td>"
-                f"<td>{row['best_val_mse']:.6f}</td>"
                 f"<td>{row['mean_test_mse']:.6f}</td>"
+                f"<td>{row['median_test_mse']:.6f}</td>"
+                f"<td>{row['best_test_mse']:.6f}</td>"
+                f"<td>{row['mean_val_mse']:.6f}</td>"
                 f"<td>{row['mean_train_time_s']:.1f}s</td>"
                 f"<td>{int(row['n_runs'])}</td>"
                 "</tr>"
@@ -534,17 +561,17 @@ def build_report(
 Optimizer und Loss-Funktion werden durchlaufen.</p>
 
 <div class="rec">
-<b>Beste Kombination (Val-MSE):</b> <b>{best.optimizer_name} + {best.loss_name}</b><br>
+<b>Beste Kombination (Test-MSE):</b> <b>{best.optimizer_name} + {best.loss_name}</b><br>
 Val: MSE={best.metrics['mse']:.6f}, RMSE={best.metrics['rmse']:.6f}, R&sup2;={best.metrics['r2']:.4f}<br>
 Test: MSE={best.test_metrics['mse']:.6f}, RMSE={best.test_metrics['rmse']:.6f}, R&sup2;={best.test_metrics['r2']:.4f}<br>
-<b>Bestes Loss-Familien-Ranking (mean Val-MSE):</b> {best_loss_name}<br>
-<b>Bester Optimizer (mean Val-MSE):</b> {best_opt_name}
+<b>Bestes Loss-Familien-Ranking (mean Test-MSE):</b> {best_loss_name}<br>
+<b>Bester Optimizer (mean Test-MSE):</b> {best_opt_name}
 </div>
 
 <h2>Setup</h2>
 <div class="cfg">
 History H={cfg.seq_len} Schritte ({cfg.seq_len*0.2:.1f}s @ 5Hz), Horizon={cfg.horizon} ({cfg.horizon*200}ms),
-Stride={cfg.stride}, Epochen={cfg.epochs}, Batch={cfg.batch_size}, Hidden={cfg.hidden}, LR={cfg.lr}<br>
+Stride={cfg.stride}, Epochen={cfg.epochs}, Batch={cfg.batch_size}, GRU-Architektur={"-".join(str(x) for x in cfg.gru_architecture)}, LR={cfg.lr}<br>
 Weight Decay={cfg.weight_decay}, Momentum={cfg.momentum}, smooth_l1_beta={cfg.smooth_l1_beta}, huber_delta={cfg.huber_delta}<br>
 Optimizer: {", ".join(cfg.optimizers)}<br>
 Losses: {", ".join(cfg.losses)}<br>
@@ -552,7 +579,7 @@ Train-Trips: {meta['n_train_trips']} &middot; Val-Trips: {meta['n_val_trips']} &
 Train-Fenster: {meta['n_train_windows']:,} &middot; Val-Fenster: {meta['n_val_windows']:,} &middot; Test-Fenster: {meta['n_test_windows']:,}
 </div>
 
-<h2>Kombinations-Ranking (sortiert nach niedrigster Val-MSE)</h2>
+<h2>Kombinations-Ranking (sortiert nach niedrigster Test-MSE)</h2>
 <table>
 <tr><th>Rang</th><th>Optimizer</th><th>Loss</th><th>Val MSE</th><th>Val RMSE</th><th>Val MAE</th><th>Val R&sup2;</th>
 <th>Test MSE</th><th>Test RMSE</th><th>Test R&sup2;</th><th>Trainingszeit</th></tr>
@@ -562,7 +589,7 @@ Train-Fenster: {meta['n_train_windows']:,} &middot; Val-Fenster: {meta['n_val_wi
 <td>{baseline_test['mse']:.6f}</td><td>{baseline_test['rmse']:.6f}</td><td>{baseline_test['r2']:.4f}</td><td>-</td></tr>
 </table>
 
-<p class="note">Ranking erfolgt ueber Val-MSE (niedriger ist besser). Die Aggregat-Tabellen unten mitteln ueber alle Gegenkombinationen.</p>
+<p class="note">Ranking erfolgt ueber Test-MSE (niedriger ist besser). Die Aggregat-Tabellen unten mitteln ueber alle Gegenkombinationen.</p>
 
 <h2>Optimizer-Aggregat</h2>
 {opt_table}
@@ -570,7 +597,7 @@ Train-Fenster: {meta['n_train_windows']:,} &middot; Val-Fenster: {meta['n_val_wi
 <h2>Loss-Aggregat</h2>
 {loss_table}
 
-<h2>Plot: Alle Kombinationen nach Val-MSE sortiert</h2>
+<h2>Plot: Alle Kombinationen nach Test-MSE sortiert</h2>
 <p class="note">Diese Ansicht zeigt die von dir gewuenschte Sortierung nach Loss-Wert ({'absteigend' if cfg.sort_desc else 'aufsteigend'}).</p>
 <img src='data:image/png;base64,{imgs['combo']}'/>
 
@@ -672,13 +699,13 @@ def save_outputs(results: list[ComboResult], cfg: Config, meta_base: dict, t_sta
     html = build_report(results, cfg, baseline_val, baseline_test, meta)
     (REPORTS_DIR / REPORT_NAME).write_text(html, encoding="utf-8")
 
-    ranked = sorted(results, key=lambda r: r.metrics["mse"])
+    ranked = sorted(results, key=lambda r: r.test_metrics["mse"])
     best = ranked[0]
     print("\n" + "=" * 68)
     print(f"ZWISCHENSTAND gespeichert (fertig: {len(results)} Kombinationen)")
     print(
         f"Aktuell beste Kombi: {best.optimizer_name}+{best.loss_name} | "
-        f"Val MSE={best.metrics['mse']:.6f} | Test MSE={best.test_metrics['mse']:.6f}"
+        f"Test MSE={best.test_metrics['mse']:.6f} | Val MSE={best.metrics['mse']:.6f}"
     )
     print(f"Report: {REPORTS_DIR / REPORT_NAME}")
     print(f"Metriken: {REPORTS_DIR / METRICS_CSV_NAME}, {REPORTS_DIR / METRICS_JSON_NAME}")
@@ -698,6 +725,18 @@ def parse_csv_list(raw: str) -> list[str]:
     return uniq
 
 
+def parse_architecture(raw: str) -> tuple[int, ...]:
+    parts = [p.strip() for p in raw.split(",") if p.strip()]
+    if not parts:
+        raise ValueError("Leere GRU-Architektur ist nicht erlaubt")
+    vals = tuple(int(p) for p in parts)
+    if any(v <= 0 for v in vals):
+        raise ValueError("Alle Werte in --gru-architecture muessen > 0 sein")
+    if len(vals) > 3:
+        raise ValueError("--gru-architecture darf maximal 3 Layer enthalten")
+    return vals
+
+
 def parse_args() -> Config:
     p = argparse.ArgumentParser(description="GRU Bruteforce fuer Loss und Optimizer.")
     p.add_argument("--full", action="store_true", help="Alle Trips (Fraction=1.0).")
@@ -707,7 +746,12 @@ def parse_args() -> Config:
     p.add_argument("--horizon", type=int, default=50)
     p.add_argument("--stride", type=int, default=5)
     p.add_argument("--batch-size", type=int, default=256)
-    p.add_argument("--hidden", type=int, default=64)
+    p.add_argument(
+        "--gru-architecture",
+        type=str,
+        default="96,64",
+        help="GRU-Hidden-Sizes je Layer, z.B. 96,64 (Standard: bestes Architektur-Sweep-Modell).",
+    )
     p.add_argument("--lr", type=float, default=1e-3)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--max-train-trips", type=int, default=None)
@@ -728,13 +772,13 @@ def parse_args() -> Config:
         "--sort-desc",
         dest="sort_desc",
         action="store_true",
-        help="Sortierung in Plots absteigend nach Val-MSE (Default).",
+        help="Sortierung in Plots absteigend nach Test-MSE (Default).",
     )
     sort_group.add_argument(
         "--sort-asc",
         dest="sort_desc",
         action="store_false",
-        help="Sortierung in Plots aufsteigend nach Val-MSE.",
+        help="Sortierung in Plots aufsteigend nach Test-MSE.",
     )
     p.add_argument("--top-loss-curves", type=int, default=12)
     p.set_defaults(sort_desc=True)
@@ -747,7 +791,7 @@ def parse_args() -> Config:
         fraction=1.0 if a.full else a.fraction,
         epochs=a.epochs,
         batch_size=a.batch_size,
-        hidden=a.hidden,
+        gru_architecture=parse_architecture(a.gru_architecture),
         lr=a.lr,
         seed=a.seed,
         max_train_trips=a.max_train_trips,
@@ -864,10 +908,10 @@ def main():
             save_outputs(results, cfg, meta_base, t_start)
 
     print("\nFERTIG.")
-    best = sorted(results, key=lambda r: r.metrics["mse"])[0]
+    best = sorted(results, key=lambda r: r.test_metrics["mse"])[0]
     print(
-        f"Beste Kombination nach Val-MSE: {best.optimizer_name}+{best.loss_name} "
-        f"(Val MSE={best.metrics['mse']:.6f}, Test MSE={best.test_metrics['mse']:.6f})"
+        f"Beste Kombination nach Test-MSE: {best.optimizer_name}+{best.loss_name} "
+        f"(Test MSE={best.test_metrics['mse']:.6f}, Val MSE={best.metrics['mse']:.6f})"
     )
 
 
