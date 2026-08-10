@@ -81,7 +81,7 @@ MAX_TEST_WINDOWS: int | None = None
 
 
 # ===========================================================================
-# REGULARISIERUNG  (vorhanden, aber initial deaktiviert -> 0)
+# REGULARISIERUNG
 # ===========================================================================
 DROPOUT = 0.0            # Dropout zwischen GRU-Layern und vor dem Ausgabekopf
 WEIGHT_DECAY = 0.0       # L2-Regularisierung (Adam weight_decay)
