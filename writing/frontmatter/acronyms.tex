@@ -48,3 +48,55 @@
 \newacronym{MDP}{MDP}{Markov Decision Process}
 \newacronym{POMDP}{POMDP}{Partially Observable Markov Decision Process}
 \newacronym{SI}{SI}{Internationales Einheitensystem}
+\newacronym{DL}{DL}{Deep Learning}
+\newacronym{EMA}{EMA}{Exponential Moving Average}
+\newacronym{AMP}{AMP}{Automatic Mixed Precision}
+\newacronym{GPU}{GPU}{Graphics Processing Unit}
+\newacronym{CPU}{CPU}{Central Processing Unit}
+\newacronym{TPU}{TPU}{Tensor Processing Unit}
+
+% ---------------------------------------------------------------------------
+% Abkürzungs-Anzeige mit Auffrischung pro Section
+%   - Allererste Verwendung im Dokument:  Langform (Kurzform)
+%   - Erste Verwendung in einer neuen Section (bereits zuvor verwendet):
+%                                          Kurzform (Langform)
+%   - Weitere Verwendungen in derselben Section: nur Kurzform
+% Die Auffrischung erfolgt nur bei \section, nicht bei \subsection/\subsubsection.
+% ---------------------------------------------------------------------------
+
+% Kurzform mit korrektem Plural und Groß-/Kleinschreibung
+\newcommand{\glsAbbrShort}{%
+  \glsifplural
+    {\glscapscase{\glsentryshortpl{\glslabel}}{\Glsentryshortpl{\glslabel}}{\glsentryshortpl{\glslabel}}}%
+    {\glscapscase{\glsentryshort{\glslabel}}{\Glsentryshort{\glslabel}}{\glsentryshort{\glslabel}}}%
+}
+% Langform mit korrektem Plural und Groß-/Kleinschreibung
+\newcommand{\glsAbbrLong}{%
+  \glsifplural
+    {\glscapscase{\glsentrylongpl{\glslabel}}{\Glsentrylongpl{\glslabel}}{\glsentrylongpl{\glslabel}}}%
+    {\glscapscase{\glsentrylong{\glslabel}}{\Glsentrylong{\glslabel}}{\glsentrylong{\glslabel}}}%
+}
+
+\defglsentryfmt{%
+  \ifglsused{\glslabel}%
+    {% bereits in dieser Section verwendet -> nur Kurzform
+      \glsAbbrShort\glsinsert
+    }%
+    {% erste Verwendung in dieser Section
+      \ifcsdef{glsever@\glslabel}%
+        {% schon einmal (in einer fruheren Section) verwendet -> Kurzform (Langform)
+          \glsAbbrShort\glsinsert\ (\glsAbbrLong)%
+        }%
+        {% allererste Verwendung im gesamten Dokument -> Langform (Kurzform)
+          \glsAbbrLong\glsinsert\ (\glsAbbrShort)%
+          \csgdef{glsever@\glslabel}{1}%
+        }%
+    }%
+}
+
+% Bei jeder neuen \section den "in dieser Section verwendet"-Status zuruecksetzen
+\AtBeginDocument{%
+  \pretocmd{\section}{\glsresetall}{}{%
+    \PackageWarning{acronyms}{Konnte \string\section\space nicht patchen}%
+  }%
+}

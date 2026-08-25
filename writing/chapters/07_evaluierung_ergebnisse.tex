@@ -1,15 +1,120 @@
-\section{Evaluierung und Ergebnisse}
+\section{Evaluierung des Modells}
+\label{sec:evaluation}
 
-\subsection{Evaluierungsmetriken}
-Dieses Kapitel definiert die quantitativen Error-Metriken (\gls{MSE}, \gls{MAE}) zur Leistungsmessung und etabliert den Bewertungsmaßstab auf dem isolierten Test-Set.
+Nachdem in Kapitel~\ref{sec:training} das finale Modell (Iteration~5, Checkpoint aus Epoche~12) auf dem vollständigen Trainingsdatensatz trainiert wurde, wird es in diesem Kapitel erstmals auf der Testmenge evaluiert. Diese $261$ Trips bzw. $24.359$ Fenster wurden gemäß Abschnitt~\ref{subsec:split} während der gesamten Architektur-, Dimensionierungs- und Trainingsphase konsequent unangetastet gelassen; die im Folgenden berichteten Ergebnisse stellen damit die erste und einzige Auswertung des Modells auf tatsächlich ungesehenen Daten dar.
 
-\subsection{Ergebnisse des Behavior Cloning}
+Das Kapitel gliedert sich in fünf Abschnitte: Abschnitt~\ref{subsec:finale_testevaluation} stellt die aggregierten Testset-Metriken im Vergleich zu einer einfachen Persistenz-Baseline vor. Abschnitt~\ref{subsec:klassenweise_analyse} schlüsselt diese Ergebnisse klassenweise nach Brems-, Halte- und Beschleunigungsanforderungen auf. Abschnitt~\ref{subsec:qualitative_analyse} ergänzt diese quantitative Sicht um eine qualitative Betrachtung anhand konkreter Beispielfahrten. Abschnitt~\ref{subsec:generalisierung} untersucht, wie die Modellgüte mit Eigenschaften der einzelnen Trips zusammenhängt. Abschnitt~\ref{subsec:kritische_einordnung} fasst die Ergebnisse abschließend zusammen und ordnet die identifizierten Schwächen des Modells kritisch ein.
 
-\subsubsection{Quantitative Loss-Analyse}
-Es erfolgt die Auswertung und Interpretation der berechneten Metriken sowie der Train- vs. Validation-Loss-Kurven zum Nachweis verhinderter Überanpassung.
+\subsection{Finale Testset-Evaluation}
+\label{subsec:finale_testevaluation}
 
-\subsubsection{Visuelle Verhaltensanalyse}
-Dieser Abschnitt stellt die vorhergesagten Actions (Hebelstellungen) und die Ground Truth (Fahrereingaben) grafisch über die Zeit gegenüber.
+Um die Ergebnisse des finalen Modells realistisch einordnen zu können, wird es in \autoref{tab:test_ergebnisse} einer Persistenz-Baseline gegenübergestellt. Diese Baseline verwendet kein trainiertes Modell, sondern schreibt für jeden Vorhersagezeitpunkt schlicht den zuletzt beobachteten, tatsächlichen Labelwert unverändert fort -- sie unterstellt also, dass sich die angeforderte Hebelstellung über den Prädiktionshorizont hinweg nicht ändert. Eine solche Baseline ist bei Zeitreihenvorhersagen ein etablierter, sehr strenger Mindestmaßstab: Da sie ohne jegliches Training und ohne jegliches gelernte Wissen über Fahrdynamik auskommt, sollte ein sinnvoll trainiertes Modell sie zumindest auf den für die Anwendung relevanten Metriken übertreffen können. \autoref{tab:test_ergebnisse} verwendet dazu dieselben fünf, bereits in Abschnitt~\ref{subsec:experimentelles_vorgehen} eingeführten Metriken, ergänzt um den \gls{MSE}. Für die Richtungs-Accuracy gilt dabei konkret ein Totband von $\pm0{,}05$ um den Nullpunkt -- Werte innerhalb dieses Bands zählen unabhängig von ihrem Vorzeichen als \glqq Halten\grqq{} --, für die Toleranz-Accuracy eine Abweichungsschwelle von $0{,}1$.
 
-\subsection{Diskussion und Limitationen}
-Dieses Kapitel interpretiert die erzielten Ergebnisse objektiv und ordnet verbleibende Fehlerquellen (Covariate Shift) sowie Limitationen im Datensatz kritisch ein.
+\begin{table}[h]
+    \centering
+    \small
+    \caption[Finale Testset-Ergebnisse]{Finale Testset-Ergebnisse des Modells im Vergleich zur Persistenz-Baseline.}
+    \label{tab:test_ergebnisse}
+    \begin{tabularx}{\textwidth}{@{} l X X X X X X @{}}
+        \toprule
+        \textbf{Modell} & \textbf{$R^2$} & \textbf{RMSE} & \textbf{MAE} & \textbf{MSE} & \textbf{Richtungs-Acc.} & \textbf{Toleranz-Acc.} \\
+        \midrule
+        Finales Modell       & 0{,}0782 & 0{,}1700 & 0{,}0929 & 0{,}028899 & 62{,}59\,\% & 73{,}54\,\% \\
+        Persistenz-Baseline  & $-0{,}0382$ & 0{,}1804 & 0{,}0838 & 0{,}032549 & 73{,}32\,\% & 74{,}81\,\% \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+Das Bild, das sich aus diesem Vergleich ergibt, ist gemischt und in Teilen ernüchternd. Bei den drei unmittelbar über den quadratischen Fehler definierten Größen -- $R^2$, \gls{RMSE} und \gls{MSE} -- schneidet das trainierte Modell klar besser ab als die Persistenz-Baseline; insbesondere das negative $R^2$ der Baseline zeigt, dass eine reine Fortschreibung des letzten Labelwerts die Varianz im Testlabel schlechter erklärt als der einfache Mittelwert. Bei den drei übrigen Größen -- \gls{MAE}, Richtungs-Accuracy und Toleranz-Accuracy -- kehrt sich das Bild jedoch um: Die Persistenz-Baseline erreicht hier durchweg bessere Werte, bei der Richtungs-Accuracy mit $73{,}32\,\%$ gegenüber $62{,}59\,\%$ sogar deutlich.
+
+Dass eine derart einfache, nicht lernende Baseline das trainierte Modell in der Hälfte der betrachteten Metriken übertrifft -- und dabei ausgerechnet bei den beiden unmittelbar interpretierbaren Accuracy-Maßen --, ist ein kritisch einzuordnender Befund. Er bedeutet zunächst, dass das Modell für sich genommen noch keinen uneingeschränkten praktischen Mehrwert gegenüber der denkbar einfachsten Strategie \glqq alles bleibt, wie es zuletzt war\grqq{} demonstriert: Wer lediglich an einer robusten Richtungs- oder Toleranztreue interessiert wäre, würde auf dieser Testmenge zunächst mit der Persistenz-Baseline besser fahren. Bei genauerer Betrachtung relativiert sich dieser Befund jedoch, ohne dass er dadurch irrelevant würde: Wie der folgende Absatz zeigt, ist er keine allgemeine Aussage über die Qualität des Modells, sondern spiegelt vor allem die besondere Zusammensetzung der Testmenge wider.
+
+Dieser scheinbare Widerspruch lässt sich mit der bereits in Abschnitt~\ref{subsec:split} beschriebenen Zusammensetzung der Testmenge erklären: Diese besteht überproportional aus Rangier- und Anfahrsituationen im unteren Geschwindigkeitsbereich, in denen sich das Label von einem Zeitschritt zum nächsten nur wenig ändert. Unter diesen Bedingungen ist \glqq den letzten bekannten Wert fortschreiben\grqq{} eine bereits sehr wirksame Strategie, die insbesondere bei den robusteren, wenig ausreißerempfindlichen Metriken \gls{MAE} sowie den beiden Accuracy-Maßen kaum zu unterbieten ist. Der quadratische Fehler reagiert dagegen deutlich empfindlicher auf die selteneren, aber betragsmäßig großen Fehler, die der Persistenz-Ansatz bei abrupten Fahrmanövern zwangsläufig macht; hier kann das gelernte Modell seinen Vorteil ausspielen.
+
+Für die Bewertung des Modells bedeutet dies in der Summe: Die Überlegenheit gegenüber der Persistenz-Baseline beschränkt sich im Wesentlichen auf genau jene selteneren, dynamischen Situationen, in denen sich das Label tatsächlich stark ändert, während das Modell in den häufigeren, ruhigen Phasen kaum über eine triviale Fortschreibung hinauskommt. Dass die Baseline überhaupt in Schlagdistanz zum trainierten Modell bleibt, ist damit weniger ein Zeichen dafür, dass die Baseline besonders gut wäre, als vielmehr ein Indiz dafür, dass das Modell sein eigentliches Potenzial noch nicht über die gesamte Bandbreite der Testsituationen hinweg ausspielt -- eine Beobachtung, die in den folgenden Abschnitten anhand der klassenweisen Analyse weiter vertieft wird.
+\subsection{Klassenweise Analyse}
+\label{subsec:klassenweise_analyse}
+
+Um die im vorherigen Abschnitt beobachtete Diskrepanz zwischen den regressions- und den klassifikationsbasierten Metriken genauer zu verstehen, wird das Vorhersageverhalten des Modells im Folgenden klassenweise aufgeschlüsselt.
+
+\autoref{fig:test_confusion} zeigt die Richtungs-Konfusionsmatrix auf der Testmenge, zeilennormiert auf die jeweils wahre Klasse. Jede Zeile summiert sich also auf $100\,\%$ und gibt an, wie sich die tatsächlichen Fenster einer Klasse auf die drei vorhergesagten Klassen verteilen; die Zellenbeschriftung enthält zusätzlich die absolute Fensterzahl. Von den $2.031$ Fenstern mit wahrer Klasse \glqq Bremsen\grqq{} werden lediglich $3{,}2\,\%$ ($n=65$) auch als solche erkannt, während $86{,}3\,\%$ ($n=1{.}753$) fälschlich als \glqq Halten\grqq{} und weitere $10{,}5\,\%$ ($n=213$) sogar als \glqq Beschleunigen\grqq{} vorhergesagt werden. Bei den $14.835$ Fenstern mit wahrer Klasse \glqq Halten\grqq{} werden $82{,}6\,\%$ korrekt erkannt. Von den $7.493$ Fenstern mit wahrer Klasse \glqq Beschleunigen\grqq{} werden $39{,}0\,\%$ korrekt erkannt, während $60{,}9\,\%$ als \glqq Halten\grqq{} fehlklassifiziert werden.
+
+Diese Verteilung offenbart eine deutliche und sicherheitsrelevante Schwäche des Modells: Echte Bremsanforderungen werden nahezu systematisch verpasst und stattdessen überwiegend als neutrale \glqq Halten\grqq{}-Anforderung vorhergesagt. Auch bei Beschleunigungsanforderungen dominiert mit knapp $61\,\%$ die Fehlklassifikation als \glqq Halten\grqq{}. Das Modell zeigt damit eine ausgeprägte Tendenz, im Zweifel eine neutrale, risikoarme Vorhersage abzugeben, anstatt tatsächlich vorhandene, aber vergleichsweise seltene Brems- oder Beschleunigungsanforderungen korrekt zu erkennen.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\textwidth]{test_eval_confusion.png}
+    \caption[Richtungs-Konfusionsmatrix auf der Testmenge]{Zeilennormierte Richtungs-Konfusionsmatrix auf der Testmenge. Jede Zeile zeigt, wie sich die Fenster einer wahren Klasse (Zeile) prozentual auf die drei vorhergesagten Klassen (Spalte) verteilen; in Klammern jeweils die absolute Fensterzahl.}
+    \label{fig:test_confusion}
+\end{figure}
+
+\autoref{tab:test_classwise} fasst dieselben Ergebnisse als klassenweise Precision, Recall und F1-Score zusammen und ergänzt sie um den Macro-Average über alle drei Klassen. Precision gibt dabei den Anteil der tatsächlich korrekten Vorhersagen unter allen als eine bestimmte Klasse vorhergesagten Fenstern an, Recall den Anteil der korrekt erkannten unter allen tatsächlich dieser Klasse zugehörigen Fenstern, und der F1-Score fasst beide als harmonisches Mittel zusammen.
+
+\begin{table}[h]
+    \centering
+    \small
+    \caption[Klassenweise Metriken auf der Testmenge]{Klassenweise Precision, Recall und F1-Score auf der Testmenge.}
+    \label{tab:test_classwise}
+    \begin{tabularx}{\textwidth}{@{} l X X X X @{}}
+        \toprule
+        \textbf{Klasse} & \textbf{Precision} & \textbf{Recall} & \textbf{F1} & \textbf{Support} \\
+        \midrule
+        Bremsen         & 0{,}409 & 0{,}032 & 0{,}059 & 2.031 \\
+        Halten          & 0{,}660 & 0{,}826 & 0{,}734 & 14.835 \\
+        Beschleunigen   & 0{,}520 & 0{,}390 & 0{,}446 & 7.493 \\
+        \midrule
+        Macro-Average   & 0{,}529 & 0{,}416 & 0{,}413 & -- \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+Der niedrige Recall der Klasse Bremsen von lediglich $0{,}032$ bestätigt den bereits aus der Konfusionsmatrix ersichtlichen Befund: Nur gut jede 31.\ tatsächliche Bremsanforderung wird vom Modell auch als solche erkannt. Bemerkenswert ist außerdem, dass selbst die Precision der Klasse Bremsen mit $0{,}409$ vergleichsweise niedrig ausfällt -- das Modell liegt also auch bei den wenigen tatsächlich als Bremsen vorhergesagten Fenstern in weniger als der Hälfte der Fälle richtig. Die Klasse Halten erreicht mit einem F1-Score von $0{,}734$ mit Abstand das beste Ergebnis, was angesichts ihres hohen Anteils an der Testmenge (rund $61\,\%$ aller Fenster) jedoch auch bedeutet, dass ein Modell, das überwiegend \glqq Halten\grqq{} vorhersagt, bereits einen Großteil der Gesamtgenauigkeit für sich beanspruchen kann. Der insgesamt moderate Macro-F1 von $0{,}413$ zeigt, dass dieser Vorteil bei einer über alle drei Klassen gleich gewichteten Betrachtung -- wie sie für eine sicherheitsrelevante Anwendung wie das Erkennen von Bremsanforderungen angemessen wäre -- nicht ausreicht, um von einer verlässlichen Klassifikationsleistung zu sprechen.
+
+Einen ergänzenden Blick auf dieses Verhalten liefert \autoref{fig:test_label_overlay}, die die Häufigkeitsverteilung der wahren Labelwerte der Verteilung der Modellvorhersagen über die gesamte Testmenge gegenüberstellt. Auf der x-Achse ist der Label- bzw. Vorhersagewert im Bereich $[-1,1]$ aufgetragen, auf der y-Achse die Anzahl der Fenster je Balken. Die Verteilung der wahren Labels (blau) zeigt eine ausgeprägte Spitze nahe null mit rund $5.300$ Fenstern, daneben aber auch substanzielle Anteile im Bereich zwischen etwa $0{,}1$ und $0{,}3$ sowie vereinzelte, über den gesamten Wertebereich bis hin zu $\pm 1$ verteilte Balken. Die Verteilung der Vorhersagen (rot) fällt dagegen deutlich schmaler aus: Sie konzentriert sich mit einer Spitze von über $9.000$ Fenstern noch stärker um den Nullpunkt und fällt bereits ab etwa $\pm 0{,}15$ auf nahezu null ab.
+
+Diese Gegenüberstellung veranschaulicht bildlich, was die Konfusionsmatrix bereits zahlenmäßig gezeigt hat: Das Modell reproduziert die Bandbreite der tatsächlichen Hebelstellungen nur unzureichend. Anstatt auch größere, betragsmäßig deutliche Anforderungen vorherzusagen, konzentrieren sich die Vorhersagen fast durchgehend auf einen schmalen Bereich nahe null -- das Modell verhält sich damit in weiten Teilen wie eine stark geglättete, gedämpfte Version des wahren Signals.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\textwidth]{test_eval_label_overlay.png}
+    \caption[Verteilung wahrer Labels und Vorhersagen auf der Testmenge]{Häufigkeitsverteilung der wahren Labelwerte (blau) im Vergleich zur Verteilung der Modellvorhersagen (rot) über alle $24.359$ Testfenster. Die gestrichelten Linien markieren vermutlich das oben beschriebene Totband von $\pm 0{,}05$.}
+    \label{fig:test_label_overlay}
+\end{figure}
+
+\subsection{Qualitative Analyse anhand von Beispielfahrten}
+\label{subsec:qualitative_analyse}
+
+Um die bislang aggregierten, aber abstrakten Kennzahlen an einem konkreten Beispiel greifbar zu machen, zeigt \autoref{fig:test_trip822} den zeitlichen Verlauf von wahrem Label und Modellvorhersage für die bereits aus Abschnitt~\ref{subsubsec:datenqualitaet} bekannte Beispielfahrt \texttt{trip822}.
+
+Der Plot zeigt zwei Linien über der Zeit: das wahre Label in Grün sowie die Modellvorhersage in Rot, beide im normierten Wertebereich $[-1,1]$. Das wahre Label zeigt zu Beginn der Fahrt ein ausgeprägtes Plateau bei rund $0{,}68$ zwischen etwa Minute~2 und~6,5, unterbrochen von einem kurzen, scharfen Ausschlag auf rund $-0{,}65$ bei Minute~1. Es folgt ein zweites, etwas niedrigeres Plateau bei rund $0{,}42$ zwischen Minute~7,5 und~11. Ab Minute~11 pendelt das wahre Label überwiegend nahe null, unterbrochen von mehreren kurzen Ausschlägen, darunter ein deutlicher Sprung auf rund $0{,}5$ bei Minute~18,5 sowie mehrere negative Ausschläge bis rund $-0{,}35$ gegen Ende der Fahrt.
+
+Die Modellvorhersage folgt diesem Verlauf nur teilweise. Während des ersten, höchsten Plateaus erreicht sie mit einem hügelförmigen Verlauf lediglich Werte um $0{,}30$ bis $0{,}45$ und bleibt damit durchgehend deutlich unter dem wahren Niveau von $0{,}68$. Beim zweiten, niedrigeren Plateau liegt die Vorhersage dagegen erkennbar näher am wahren Verlauf und erreicht mit einem kurzen Überschwinger auf rund $0{,}53$ sogar kurzzeitig ein höheres Niveau als das Label selbst. In der ruhigeren zweiten Hälfte der Fahrt ab Minute~11 verharrt die Vorhersage dagegen nahezu durchgehend nahe null und bildet weder den Sprung bei Minute~18,5 noch die negativen Ausschläge gegen Fahrtende nach.
+
+Dieses Bild bestätigt exemplarisch die bereits in Abschnitt~\ref{subsec:klassenweise_analyse} beschriebene, systematische Unterschätzung extremer Anforderungen: Bei besonders ausgeprägten, lang anhaltenden Anforderungen -- wie dem ersten Plateau dieser Fahrt -- bleibt die Vorhersage deutlich hinter der Realität zurück. Kurze, aber betragsmäßig relevante Einzelereignisse wie der Ausschlag bei Minute~18,5 werden vom Modell nahezu vollständig ignoriert, während der insgesamt näher am wahren Verlauf liegende zweite Plateau-Abschnitt zeigt, dass das Modell bei weniger extremen, aber dafür etwas länger anhaltenden Anforderungen durchaus brauchbare Ergebnisse liefern kann.
+
+\begin{sidewaysfigure}
+    \centering
+    \includegraphics[width=\textwidth]{plot_trip822_prediction.png}
+    \caption[Modellvorhersage für die Beispielfahrt \texttt{trip822}]{Wahres Label (grün) und Modellvorhersage (rot) für die Beispielfahrt \texttt{trip822} (Dauer rund 23{,}7 Minuten) über den gesamten Testzeitraum. Das Modell unterschätzt insbesondere das ausgeprägte erste Plateau bei rund $0{,}68$ deutlich und verpasst mehrere kürzere Ausschläge in der zweiten Fahrthälfte.}
+    \label{fig:test_trip822}
+\end{sidewaysfigure}
+
+Diese Beobachtung deckt sich auch mit den drei im Rahmen der Testauswertung gezielt ausgewählten Referenzfahrten: Die am besten vorhergesagte Fahrt \texttt{trip1104} (Dauer $1{,}70$\,min, ohne nennenswerten Brems- oder Beschleunigungsanteil) erreicht einen \gls{MAE} von lediglich $0{,}0110$ -- ein Hinweis darauf, dass das Modell auf ruhigen, unauffälligen Fahrabschnitten sehr präzise vorhersagt. Die am schlechtesten vorhergesagte Fahrt \texttt{trip528} (Dauer $4{,}60$\,min, zu $96{,}4\,\%$ von Beschleunigungsanforderungen geprägt) erreicht dagegen einen \gls{MAE} von $0{,}5682$ -- mehr als das Fünfzigfache des Fehlers von \texttt{trip1104}. Die bremsintensivste Fahrt \texttt{trip1337} (Dauer $0{,}60$\,min, $89{,}2\,\%$ Bremsanteil) liegt mit einem \gls{MAE} von $0{,}1985$ dazwischen, aber ebenfalls deutlich über dem Testset-Durchschnitt von $0{,}0929$. Alle drei Referenzfahrten bestätigen damit denselben Zusammenhang: Je stärker eine Fahrt von anhaltenden, ausgeprägten Brems- oder Beschleunigungsphasen dominiert wird, desto größer fällt der Vorhersagefehler des Modells aus.
+
+\subsection{Generalisierung über Trip-Charakteristika}
+\label{subsec:generalisierung}
+
+Abschließend wird untersucht, ob sich die Modellgüte systematisch mit messbaren Eigenschaften der einzelnen Trips in Verbindung bringen lässt.
+
+Zwischen der Trip-Dauer und dem trip-individuellen \gls{MAE} besteht über alle $261$ Test-Trips hinweg lediglich eine schwache positive Korrelation von $+0{,}128$. Die Vorhersagegüte des Modells hängt damit kaum systematisch von der reinen Länge einer Fahrt ab; lange Fahrten sind also weder grundsätzlich leichter noch grundsätzlich schwerer vorherzusagen als kurze.
+
+Deutlich aussagekräftiger ist dagegen die Unterscheidung zwischen Beharrungs- und Übergangsphasen. Als Übergang gilt dabei ein Zeitschritt, an dem die standardisierte Beschleunigung zum Zielzeitpunkt betragsmäßig über einem Schwellenwert von $0{,}5$ liegt, alle übrigen Zeitschritte gelten als Beharrung. Auf den $19.014$ Beharrungs-Fenstern erreicht das Modell einen \gls{MAE} von $0{,}0827$, auf den $5.345$ Übergangs-Fenstern dagegen einen \gls{MAE} von $0{,}1292$ -- ein um rund $56\,\%$ höherer Fehler. Diese Beobachtung bestätigt quantitativ, was die Konfusionsmatrix und das Beispiel \texttt{trip822} bereits andeuteten: Das Modell tut sich mit stabilen, wenig dynamischen Fahrsituationen deutlich leichter als mit Übergängen zwischen Fahrzuständen -- also genau jenen Situationen, in denen eine präzise Vorhersage der Hebelstellung für ein automatisiertes Fahrsystem am relevantesten wäre.
+
+\subsection{Kritische Einordnung}
+\label{subsec:kritische_einordnung}
+
+Die in diesem Kapitel zusammengetragenen Ergebnisse zeichnen ein konsistentes und in Teilen deutlich ernüchterndes Bild. Auf der Ebene der aggregierten Regressionsmetriken schneidet das Modell zwar spürbar besser ab als eine triviale Persistenz-Baseline; sobald jedoch klassifikationsbasierte oder ausreißerrobuste Maße betrachtet werden, fällt dieser Vorteil deutlich geringer aus oder kehrt sich sogar um. Die klassenweise Analyse in Abschnitt~\ref{subsec:klassenweise_analyse} zeigt präzise, wo das Modell an seine Grenzen stößt: Echte Bremsanforderungen werden mit einem Recall von lediglich $3{,}2\,\%$ nahezu systematisch verpasst, echte Beschleunigungsanforderungen nur zu $39{,}0\,\%$ korrekt erkannt, während die Vorhersagen insgesamt stark auf einen schmalen Bereich nahe null konzentriert bleiben. Die in Abschnitt~\ref{subsec:generalisierung} dokumentierte, rund $56\,\%$ höhere Fehlerrate in Übergangsphasen bestätigt dieses Bild aus einer weiteren Perspektive: Das Modell beherrscht die häufigen, ruhigen Fahrsituationen recht gut, hat jedoch deutliche Probleme mit den selteneren, aber für ein automatisiertes Fahrsystem besonders relevanten dynamischen Fahrmanövern.
+
+Diese Schwäche lässt sich unmittelbar auf die in Abschnitt~\ref{subsubsec:feature_auswahl} beschriebene Verteilung des Labels zurückführen: Anforderungen nahe null sowie kleine bis moderate Ausschläge dominieren den Datensatz deutlich, während betragsmäßig große Brems- und Beschleunigungsanforderungen nur einen kleinen Bruchteil der insgesamt rund $3{,}2$~Millionen Zeitschritte ausmachen. Ein auf dieser Verteilung trainiertes Modell erhält für die seltenen Extremfälle naturgemäß nur sehr wenige Trainingsbeispiele, während die verwendeten Verlustfunktionen -- \gls{MSE} während der Auswertung, Smooth-L1 während des Trainings -- den Gesamtfehler primär über die weitaus zahlreicheren, aber unauffälligeren Zeitschritte im mittleren Wertebereich minimieren. Genau diese strukturelle Unterrepräsentation seltener, aber sicherheitsrelevanter Ereignisse in den vorliegenden $178$~Stunden Aufzeichnungszeit ist eine plausible Hauptursache für die beobachteten Schwächen.
+
+Mit der aktuellen Datenlage von $1.388$ Trips bzw. rund $178$ Stunden Fahrzeit stößt diese Arbeit an dieser Stelle also an eine Grenze, die sich nicht allein durch weitere Optimierung von Architektur oder Trainings-Hyperparametern überwinden lässt: Die absolute Anzahl an Beispielen für ausgeprägte Brems- und Beschleunigungsmanöver ist schlicht zu gering, um dem Modell ein robustes Erlernen dieser seltenen, aber wichtigen Fälle zu ermöglichen. Eine Verdopplung oder gar Verdreifachung der aufgezeichneten Datenmenge würde die absolute Anzahl solcher Extremereignisse proportional mit ansteigen lassen und würde damit voraussichtlich ein deutlich leistungsfähigeres Modell ermöglichen, insbesondere für die in diesem Kapitel identifizierten Schwachstellen bei Bremserkennung und Übergangsphasen. Diese Erwartung lässt sich im Rahmen der vorliegenden Arbeit jedoch nicht empirisch belegen, sondern stellt eine plausible, aus der beobachteten Datenknappheit abgeleitete Einschätzung für nachfolgende Arbeiten dar.

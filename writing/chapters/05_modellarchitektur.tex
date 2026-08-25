@@ -1,115 +1,246 @@
-\section{Konzeption der Modellarchitektur}
-\label{ch:konzeption_modellarchitektur}
+\section{Modellkonzeption}
+\label{sec:konzeption}
 
-Aufbauend auf der systematischen Transformation des unstrukturierten Rohdatensatzes in einen maschinenlesbaren Zustandsraum erfolgt in diesem Kapitel die informationstechnische Konzeption der neuronalen Modellarchitektur. 
-Das primäre methodische Ziel besteht in der Konstruktion einer Policy $\pi_\theta$, welche in der Lage ist, auf Basis historischer Zeitreihen einen kontinuierlichen Aktionsraum -- spezifisch die Leistungs- und Bremshebelstellung -- prädiktiv abzubilden. 
+Nachdem in Kapitel~\ref{sec:daten_preprocessing} die Datenbasis aufbereitet und der finale Feature-Vektor definiert wurde, widmet sich das vorliegende Kapitel der Konzeption des neuronalen Netzes. Wie in Abschnitt~\ref{subsec:vorgehensweise} beschrieben, folgt diese Arbeit einem iterativen, experimentellen Ansatz der Modellentwicklung: Anstatt die Architektur allein auf Basis theoretischer Überlegungen aus Kapitel~\ref{sec:theoretische_grundlagen} festzulegen, werden die zentralen Konzeptionsentscheidungen durch gezielte, vergleichende Kurzexperimente empirisch abgesichert.
 
-\subsection{Auswahlder Architektur}
-\label{sec:auswahl_architektur}
+Das Kapitel ist dabei bewusst trichterförmig aufgebaut und in drei aufeinander aufbauende Experimentstufen gegliedert. Zunächst wird in Abschnitt~\ref{subsec:architekturauswahl} die grundsätzliche Art des neuronalen Netzes bestimmt, indem die in Abschnitt~\ref{sec:modellarchitekturen} vorgestellten Kandidaten -- \gls{MLP}, \gls{LSTM} und \gls{GRU} -- unter identischen Rahmenbedingungen gegeneinander antrainiert werden. Auf Basis der dabei ermittelten, geeignetsten Architektur erfolgt in Abschnitt~\ref{subsec:dimensionierung} eine Untersuchung verschiedener Layer-Konfigurationen, um eine passende Netzwerkgröße zu bestimmen. Abschließend wird in Abschnitt~\ref{subsec:optimizer_loss} für die auf diese Weise festgelegte Architektur und Dimensionierung ein weiterer Vergleich der relevantesten Optimierer und Verlustfunktionen durchgeführt.
 
-Um eine fundierte Entscheidung für die finale Modellstruktur zu treffen, wurde ein initiales experimentelles Setup aufgesetzt. 
-In dieser Evaluationsphase wurden ein \acrlongshort{MLP}, ein \acrlongshort{LSTM} sowie eine \acrlongshort{GRU} vergleichend trainiert und analysiert.
+\subsection{Experimentelles Vorgehen}
+\label{subsec:experimentelles_vorgehen}
 
-\subsubsection{Experimentelles Setup}
-Die initiale Trainingsphase wurde bewusst ohne Regularisierungsmaßnahmen wie Dropout oder Weight Decay (L2-Regularisierung) durchgeführt. 
-Dieses Vorgehen stellt sicher, dass das native Lernverhalten sowie die prinzipielle Eignung der Architekturtypen für die Verarbeitung fahrphysikalischer Zeitreihen isoliert betrachtet werden können. 
-Für eine effiziente Evaluation wurde das Training auf 20\,\% des Gesamtdatensatzes limitiert und über 10 Epochen mit einer Batch-Size von 256 sowie einer Learning Rate von 0.001 ausgeführt. 
-Das Eingangsfenster umfasste 100 Zeitschritte ($H=100$), was physikalisch 20 Sekunden an historischen Daten entspricht, um einen Vorhersagehorizont von 50 Zeitschritten (10 Sekunden) zu prädizieren.
+Um die drei nachfolgenden Experimentstufen untereinander vergleichbar zu machen, werden zunächst die für alle drei Stufen einheitlich geltenden Rahmenbedingungen festgelegt. Nur unter identischen, konstant gehaltenen Bedingungen lässt sich der beobachtete Unterschied in der Modellgüte tatsächlich auf die jeweils untersuchte Entscheidung -- Architekturtyp, Netzwerkgröße bzw. Optimierer/Loss -- zurückführen, anstatt auf zufällige Variation der übrigen Einstellungen.
 
-Die Auswertung des Feedforward-Netzwerkes verdeutlicht die theoretischen Limitationen dieser Architektur. 
-Mit 110.849 trainierbaren Parametern wies das \gls{MLP} die massivste Überdimensionierung im Testfeld auf und erreichte konsequenterweise den geringsten Trainingsfehler (siehe Abbildung \ref{fig:training_loss_comparison}). 
-Auf den ungesehenen Evaluierungsdaten versagte das Modell jedoch: 
-Der Validierungs-\gls{RMSE} lag bei 0.2297 (\gls{MAE} = 0.1476), und das Bestimmtheitsmaß auf dem Test-Set fiel auf ein $R^2$ von lediglich 0.0467 bei einer Richtungs-Accuracy von 47,52\,\% und einer Toleranz-Accuracy von 70,57\,\%. 
+Wie einleitend in Abschnitt~\ref{sec:konzeption} bereits klargestellt, werden die eigentlichen Trainings-Hyperparameter erst in Kapitel~\ref{sec:training} systematisch optimiert. Um dennoch stabile und aussagekräftige Trainingsläufe zu ermöglichen, werden sie über alle drei Experimentstufen hinweg auf feste, plausible Startwerte gesetzt. \autoref{tab:feste_rahmenparameter} fasst diese konstant gehaltenen Rahmenparameter zusammen.
 
-Aus maschineller Lernperspektive handelt es sich hierbei um ein klassisches Phänomen der extremen Überanpassung (Overfitting). 
-Wie in den theoretischen Grundlagen hergeleitet, besitzen Feedforward-Netze keinen internen Zustand (Hidden State) und verarbeiten Eingaben rein statisch. 
-Sie sind nicht in der Lage, zeitliche Kausalitäten -- wie die immense physikalische Trägheit eines Zuges -- zu erfassen. 
-Das \gls{MLP} nutzt seine enorme Parameteranzahl folglich ausschließlich zur reinen Memorization (Auswendiglernen) der Trainingsdaten. 
-Sobald das Modell auf ungesehene Evaluierungsdaten trifft, fehlt ihm das temporale Verständnis, was zu einer Explosion des Validierungs-Losses führt.
-
-Im direkten Kontrast dazu demonstrierten die rekurrenten Architekturen eine deutliche Überlegenheit. 
-Das \gls{LSTM} (19.009 Parameter) erzielte ein Test-$R^2$ von 0.1030 bei einem \gls{RMSE} von 0.1550 und einem \gls{MAE} von 0.0898. 
-Die Richtungs-Accuracy stieg auf 60,95\,\% (Toleranz-Accuracy: 73,55\,\%). 
-Die \gls{GRU} (14.273 Parameter) lieferte ähnliche, minimal schwächere Metriken mit einem Test-$R^2$ von 0.0854 (\gls{RMSE} = 0.1565, \gls{MAE} = 0.0864) und einer Richtungs-Accuracy von 60,85\,\%.
-
-\begin{figure}[htbp]
+\begin{table}[h]
     \centering
-    \includegraphics[width=\textwidth]{loss_comparison.png}
-    \caption[Trainings- und Validierungsverluste]{Vergleich der Trainings- und Validierungsverluste der evaluierten Basis-Architekturen zur Visualisierung des architekturabhängigen Lernverhaltens.}
-    \label{fig:training_loss_comparison}
+    \small
+    \caption[Konstante Rahmenparameter]{Über alle drei Experimentstufen konstant gehaltene Rahmenparameter.}
+    \label{tab:feste_rahmenparameter}
+    \begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} p{7.5cm} p{7.5cm}}
+        \toprule
+        \textbf{Parameter} & \textbf{Wert} \\
+        \midrule
+        Lernrate                          & $10^{-4}$ \\
+        Batch-Size                        & 2048 \\
+        Weight Decay ($L_2$-Regularisierung) & $10^{-4}$ \\
+        Dropout-Rate                      & 0{,}45 \\
+        Kontextfenster (Sequenzlänge)     & 100 Zeitschritte (20\,s) \\
+        Prädiktionshorizont               & 50 Zeitschritte (10\,s) \\
+        Trainingsdatenanteil je Stufe     & 50\,\% der Trips \\
+        Random Seed                       & fest, konstant über alle drei Stufen \\
+        \bottomrule
+    \end{tabular*}
+\end{table}
+
+Die feste Vorgabe von Lernrate, Batch-Size, Weight Decay und Dropout-Rate stellt sicher, dass Unterschiede zwischen den verglichenen Kandidaten nicht auf eine zufällig günstigere Wahl dieser eigentlich noch zu optimierenden Größen zurückzuführen sind. Ebenso wird durch den festen Random Seed die Reproduzierbarkeit der Experimente sichergestellt, sodass Unterschiede zwischen den Kandidaten nicht auf zufällige Gewichtsinitialisierung oder Batch-Reihenfolge zurückzuführen sind. Aus Effizienzgründen wird zudem in allen drei Experimentstufen nur die Hälfte des in Abschnitt~\ref{subsec:split} definierten Trainingsdatensatzes verwendet; die konkrete, je Experimentstufe variierende Epochenzahl wird jeweils zu Beginn der entsprechenden Subsection angegeben.
+
+Auch ein an sich zustandsloses \gls{MLP} ist gemäß Abschnitt~\ref{sec:modellarchitekturen} auf ein Sliding Window vergangener Zeitschritte angewiesen, um zeitlichen Kontext zu erhalten. Deshalb wird für alle drei Architekturen -- \gls{MLP}, \gls{LSTM} und \gls{GRU} gleichermaßen -- das in \autoref{tab:feste_rahmenparameter} angegebene, einheitliche Kontextfenster von 100 Zeitschritten verwendet. Bei dem in Abschnitt~\ref{subsec:datengrundlage} beschriebenen Zeitraster von 200\,ms entspricht dies einem historischen Kontext von 20 Sekunden. Durch diese einheitliche Fenstergröße wird sichergestellt, dass beobachtete Leistungsunterschiede tatsächlich auf die architektonische Fähigkeit zur Verarbeitung zeitlicher Abhängigkeiten zurückzuführen sind und nicht auf einen unterschiedlich großen Informationszugang der Kandidaten.
+
+Da einzelne Metriken jeweils nur einen Teilaspekt der Modellgüte abbilden -- etwa Regressionsgenauigkeit oder Vorzeichentreue --, wird zur Bewertung der verglichenen Kandidaten ein kombiniertes Ranking-Verfahren über fünf komplementäre Validierungsmetriken herangezogen: das Bestimmtheitsmaß $R^2$, den \gls{RMSE}, den \gls{MAE}, eine Richtungs-Accuracy (Anteil der Zeitschritte, in denen das Vorzeichen der Prädiktion -- Bremsen oder Beschleunigen -- mit dem tatsächlichen Label übereinstimmt) sowie eine Toleranz-Accuracy (Anteil der Vorhersagen, die innerhalb einer definierten Abweichungsschwelle um den wahren Labelwert liegen).
+
+Für jede dieser fünf Metriken erhält jedes verglichene Modell einen Rang, wobei Rang 1 stets dem besten Modell entspricht -- bei $R^2$ sowie den beiden Accuracy-Metriken also dem höchsten Wert, bei \gls{RMSE} und \gls{MAE} dem niedrigsten. Bezeichnen $R_{R^2}$, $R_{\text{RMSE}}$, $R_{\text{MAE}}$, $R_{\text{Richtungsacc}}$ und $R_{\text{Toleranzacc}}$ die so vergebenen Einzelränge eines Modells in den fünf Metriken, ergibt sich dessen Rangsumme $S$ als deren Summe:
+\begin{equation}
+    S = R_{R^2} + R_{\text{RMSE}} + R_{\text{MAE}} + R_{\text{Richtungsacc}} + R_{\text{Toleranzacc}}
+    \label{eq:rangsumme}
+\end{equation}
+Je kleiner die Rangsumme $S$ eines Modells, desto besser hat es im Mittel über alle fünf Metriken abgeschnitten. Das Modell mit der kleinsten Rangsumme gilt entsprechend als Gewinner der jeweiligen Experimentstufe. Für den Fall gleicher Rangsummen wird zunächst das höhere $R^2$ und danach der niedrigere \gls{RMSE} als zusätzliches Entscheidungskriterium herangezogen. Dieses rangbasierte Verfahren wurde bewusst gegenüber einer einzelnen, dominanten Metrik bevorzugt, da es verhindert, dass ein Kandidat allein aufgrund einer punktuell guten, aber nicht repräsentativen Einzelmetrik ausgewählt wird.
+
+\subsection{Auswahl der Netzwerkarchitektur}
+\label{subsec:architekturauswahl}
+
+\subsubsection{Versuchsaufbau}
+\label{subsubsec:architektur_versuchsaufbau}
+
+Für diese erste Experimentstufe gelten die in \autoref{tab:feste_rahmenparameter} festgelegten Rahmenparameter; trainiert wird über 10 Epochen. Verglichen werden die drei in Abschnitt~\ref{sec:modellarchitekturen} vorgestellten Architekturkandidaten \gls{MLP}, \gls{LSTM} und \gls{GRU}, jeweils mit \gls{Adam} als Optimierer und \gls{MSE} als Verlustfunktion -- eine Wahl, die auf die in Abschnitt~\ref{sec:sl_grundlagen} dargelegten Standardverfahren zurückgreift und in dieser Stufe lediglich als neutraler Ausgangspunkt dient; die systematische Gegenüberstellung alternativer Optimierer und Verlustfunktionen erfolgt erst in Abschnitt~\ref{subsec:optimizer_loss}.
+
+Anstatt allen drei Architekturen dieselbe Hidden Size vorzugeben, wird eine näherungsweise identische Gesamtanzahl an trainierbaren Parametern angestrebt. Dies ist notwendig, da \gls{LSTM} und \gls{GRU} aufgrund ihrer internen Gate-Mechanismen (siehe Abschnitt~\ref{sec:modellarchitekturen}) bei gleicher Hidden Size ein Vielfaches an Parametern gegenüber einem einfachen \gls{MLP}-Layer besitzen. Ein Vergleich bei identischer Hidden Size würde die Architekturen somit bei stark unterschiedlicher Modellkapazität gegenüberstellen und den eigentlich interessierenden Effekt -- den strukturellen, architektonischen Umgang mit zeitlichem Kontext -- mit einem reinen Kapazitätseffekt vermengen. \autoref{tab:architektur_parameteranzahl} zeigt die dafür je Architektur gewählten Hidden-Größen sowie die daraus resultierende Parameteranzahl.
+
+\begin{table}[h]
+    \centering
+    \small
+    \caption[Parameteranzahl der Architekturen]{Hidden-Größen und resultierende Parameteranzahl der drei verglichenen Architekturen.}
+    \label{tab:architektur_parameteranzahl}
+    \begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} p{6cm} p{4.5cm} p{4.5cm}}
+        \toprule
+        \textbf{Architektur} & \textbf{Hidden Size} & \textbf{Parameter} \\
+        \midrule
+        MLP  & 6  & 15.697 \\
+        LSTM & 54 & 14.959 \\
+        GRU  & 63 & 14.806 \\
+        \bottomrule
+    \end{tabular*}
+\end{table}
+
+Die Bewertung der drei Kandidaten erfolgt anschließend nach dem in Abschnitt~\ref{subsec:experimentelles_vorgehen} beschriebenen Ranking-Verfahren auf Basis der fünf Validierungsmetriken.
+
+\subsubsection{Ergebnisse und Architekturauswahl}
+\label{subsubsec:architektur_ergebnisse}
+
+\autoref{tab:architektur_ergebnisse} fasst die Ergebnisse des Architekturvergleichs auf der Validierungsmenge zusammen.
+
+\begin{table}[h]
+    \centering
+    \small
+    \caption[Ergebnisse des Architekturvergleichs]{Ergebnisse des Architekturvergleichs auf der Validierungsmenge.}
+    \label{tab:architektur_ergebnisse}
+    \begin{tabularx}{\textwidth}{@{} l X X X X X X @{}}
+        \toprule
+        \textbf{Modell} & \textbf{Score} & \textbf{$R^2$} & \textbf{RMSE} & \textbf{MAE} & \textbf{Richtungs-Acc.} & \textbf{Toleranz-Acc.} \\
+        \midrule
+        LSTM & 5,0  & 0,0456   & 0,1730 & 0,1028 & 56,41\,\% & 69,15\,\% \\
+        GRU  & 10,0 & 0,0030   & 0,1768 & 0,1069 & 53,01\,\% & 67,24\,\% \\
+        MLP  & 15,0 & $-$0,3224 & 0,2036 & 0,1568 & 29,95\,\% & 26,39\,\% \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+Das Ranking fällt bemerkenswert eindeutig aus: Mit einer Rangsumme von $S=5{,}0$ belegt das \gls{LSTM} in allen fünf betrachteten Metriken durchgehend den ersten Platz, während das \gls{GRU} mit $S=10{,}0$ in jeder Einzelmetrik konstant den zweiten und das \gls{MLP} mit $S=15{,}0$ konstant den dritten Platz einnimmt. Diese widerspruchsfreie Ordnung über alle fünf, methodisch unterschiedlichen Metriken hinweg deutet darauf hin, dass der beobachtete Leistungsunterschied kein Artefakt einer einzelnen Metrik ist, sondern die grundsätzliche Eignung der jeweiligen Architektur für die vorliegende Aufgabe widerspiegelt.
+
+\autoref{fig:architektur_losskurven} zeigt den Trainings- und Validierungs-Loss (jeweils als \gls{MSE}) der drei verglichenen Architekturen über die zehn Trainingsepochen dieses Vergleichs -- links für die Trainings-, rechts für die Validierungsdaten. In beiden Teilplots verläuft die Kurve des MLP durchgehend oberhalb der Kurven von LSTM und GRU: Auf den Trainingsdaten startet das MLP bei einem MSE von rund 0,11 und fällt bis zur zehnten Epoche auf etwa 0,05, während LSTM und GRU bereits zu Beginn deutlich niedriger liegen (rund 0,04 bzw. 0,05) und bis Epoche 10 auf rund 0,025 bzw. 0,03 absinken. Auf den Validierungsdaten zeigt sich ein ähnliches Bild: Das MLP fällt von rund 0,095 auf etwa 0,04, bleibt damit aber bis zum Ende deutlich über LSTM und GRU, die beide bereits nach wenigen Epochen auf einen stabilen Wert von rund 0,03 abflachen, wobei die LSTM-Kurve durchgehend minimal unterhalb der GRU-Kurve verläuft.
+
+Dieses Verhalten deckt sich mit der in Abschnitt~\ref{sec:modellarchitekturen} theoretisch hergeleiteten fundamentalen Schwäche des \gls{MLP}: Ohne internen Zustandsspeicher kann es zeitliche Abhängigkeiten innerhalb des Kontextfensters nur indirekt über die reine Eingabedimension erschließen, was die Konvergenz erkennbar erschwert. \gls{LSTM} und \gls{GRU} können dagegen von Beginn an auf einem deutlich niedrigeren Fehlerniveau arbeiten, da sie ihren internen Zustand gezielt nutzen, um die zeitliche Struktur der Eingabe zu verarbeiten.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\textwidth]{LSTM_val_train.png}
+    \caption[Trainings- und Validierungs-Loss der drei Architekturen]{Trainings-Loss (links) und Validierungs-Loss (rechts, jeweils als MSE) der drei verglichenen Architekturen MLP, LSTM und GRU über die zehn Trainingsepochen dieses Architekturvergleichs.}
+    \label{fig:architektur_losskurven}
 \end{figure}
 
-Diese Ergebnisse belegen die Theorie: 
-\gls{LSTM} und \gls{GRU} glänzen, da sie exakt für derartige hochgradig sequenzielle Aufgaben entworfen wurden. 
-Durch ihre rekurrente Architektur und die spezialisierten Gating-Mechanismen (wie den Cell State beim \gls{LSTM}) können sie historische Abhängigkeiten über das gesamte 20-sekündige Eingangsfenster aggregieren. 
-Das Modell begreift mathematisch, dass ein aktuelles Bremsmanöver kausal mit infrastrukturellen oder physikalischen Signalen aus der Vergangenheit zusammenhängt.
+Bei aller Eindeutigkeit des Rankings ist eine kritische Einordnung der absoluten Werte notwendig. Das mit $R^2 = 0{,}0456$ beste Modell erklärt nach nur zehn Trainingsepochen auf halbem Datenumfang lediglich einen sehr kleinen Anteil der Varianz im Label. Dies ist im Kontext dieser Experimentstufe jedoch nicht überraschend, sondern erwartungsgemäß: Ziel des Architekturvergleichs ist ausschließlich der relative Vergleich der drei Kandidaten unter identischen, bewusst verkürzten Bedingungen, nicht die Erzielung eines bereits konkurrenzfähigen Endergebnisses. Weder wurden die eigentlichen Trainings-Hyperparameter optimiert, noch stand die volle Trainingsdatenmenge oder Epochenzahl zur Verfügung. Dass selbst unter diesen restriktiven Bedingungen eine derart konsistente Rangfolge zwischen den Architekturen sichtbar wird, stützt die Aussagekraft der Entscheidung und unterstreicht zugleich die Notwendigkeit der in Kapitel~\ref{sec:training} folgenden, vollständigen Hyperparameteroptimierung.
 
-Ein wissenschaftlich interessantes Phänomen zeigte sich zudem bei den Trainingszeiten. 
-Aus informationstheoretischer Sicht sollte die \gls{GRU} recheneffizienter agieren, da sie durch die Einsparung von Gates mit lediglich 14.273 Parametern deutlich schlanker ist als das \gls{LSTM} (19.009 Parameter). 
-Dennoch beanspruchte das Training der \gls{GRU} 654,8 Sekunden, während das \gls{LSTM} bereits nach 399,7 Sekunden konvergierte.
-
-Diese Laufzeit-Anomalie lässt sich durch die zugrundeliegende Software-Architektur erklären. 
-In etablierten Deep-Learning-Frameworks wie PyTorch wurden die Implementierungen von \gls{LSTM}-Zellen über Jahre hinweg auf Hardware- und C++-Ebene extrem stark optimiert. 
-Die internen Matrixmultiplikationen der \gls{LSTM}-Zellen lassen sich oftmals effizienter parallelisieren als die strikt sequenziellen Update-Schritte der \gls{GRU}. 
-Diese hochgradige Software-Optimierung überwiegt in der Praxis den theoretischen Rechenvorteil der geringeren Parameterzahl bei Weitem.
-
-\subsubsection{Fazit der Architekturauswahl}
-
-Unter Berücksichtigung der fundamentalen Anforderungen an die Generalisierungsfähigkeit fällt die finale Entscheidung -- trotz des minimal stärkeren Test-$R^2$ des \glsentryshort{LSTM}s im initialen Setup -- auf die \gls{GRU}-Architektur. 
-Aus maschineller Lernperspektive bietet die \gls{GRU} durch ihre reduzierte Parameterzahl einen entscheidenden strukturellen Vorteil: Eine geringere Modellkapazität verringert nativ die Anfälligkeit für Overfitting und zwingt das Netzwerk dazu, robustere, abstrahierte Repräsentationen der Fahrphysik zu erlernen. 
-Der im Vorfeld identifizierte Laufzeitnachteil der \gls{GRU}, welcher auf PyTorch-spezifische Implementierungsdetails zurückzuführen ist, ist für den weiteren Projektverlauf zu vernachlässigen, da das finale und rechenintensive Modelltraining ohnehin auf einer deutlich leistungsstärkeren Hardware-Infrastruktur durchgeführt wird. 
-Da jedoch auch die \gls{GRU} als unregularisiertes Basis-Modell nicht vollständig immun gegen das Auswendiglernen von Trajektorien ist, ist die Definition und Implementierung fundierter Regularisierungsstrategien für die Konstruktion der finalen Policy zwingend erforderlich.
+Auf Basis dieser konsistenten Ergebnisse wird das \gls{LSTM} als Architektur für die nachfolgenden Experimentstufen ausgewählt. Es dient in Abschnitt~\ref{subsec:dimensionierung} als Grundlage für die Untersuchung verschiedener Layer-Konfigurationen.
 
 \subsection{Dimensionierung des Netzwerks}
-\label{subsec:dimensionierung_netzwerk}
+\label{subsec:dimensionierung}
 
-Die Dimensionierung eines neuronalen Netzes unterliegt einem fundamentalen informationstheoretischen Dilemma: 
-Eine zu geringe Modellkapazität bedingt Underfitting, wodurch die komplexe Zugdynamik nicht ausreichend abgebildet werden kann. 
-Eine zu große Architektur neigt hingegen -- insbesondere bei verrauschten realen Sensordaten -- zu starkem Overfitting, da das Modell den Trainingsdatensatz auswendig lernt (Memorization) und seine Generalisierungsfähigkeit einbüßt. 
-Um das optimale Gleichgewicht empirisch zu ermitteln, wurde ein Brute-Force-Grid-Search-Verfahren implementiert. 
-Hierbei wurden 39 permutationsfähige Architekturen des ausgewählten \gls{GRU}-Modells mit einer Tiefe von ein bis drei Hidden Layern und Breiten von 64, 96 sowie 128 Neuronen unter identischen Bedingungen (10 Epochen, Batch-Size 128, Learning Rate 0.001) trainiert. 
-Als finale Entscheidungsmetrik diente der \acrlongshort{MSE} auf dem isolierten Test-Datensatz.
+\subsubsection{Versuchsaufbau}
+\label{subsubsec:dimensionierung_sweep}
 
-Die empirische Evaluation der Single-Layer-Architekturen offenbarte das schlechteste Leistungsniveau. 
-Dies belegt, dass ein einzelner rekurrenter Layer nicht über die notwendige Repräsentationskapazität verfügt, um die hochdimensionalen Abstraktionen zwischen Streckentopologie, Kinematik und resultierender Hebelstellung über das definierte Zeitfenster ($H=30$) zu erlernen. 
-Eine Erhöhung der Tiefe auf drei Hidden Layer (mit bis zu 251.265 Parametern) verschlechterte die Prädiktionsgüte jedoch massiv. 
-Diese tiefen Modelle unterliegen starkem Overfitting, da sie aufgrund der enormen Parameterzahl streckenspezifische Eigenheiten und Sensorrauschen memorieren, anstatt die kausale Fahrphysik zu generalisieren.
+Nachdem in Abschnitt~\ref{subsec:architekturauswahl} das \gls{LSTM} als geeignetste Architektur identifiziert wurde, widmet sich diese zweite Experimentstufe der Frage nach der passenden Netzwerkgröße. Variiert werden dabei zwei voneinander unabhängige Stellgrößen: die Anzahl der \gls{LSTM}-Layer sowie die Hidden Size jedes einzelnen Layers. Anders als bei einem klassischen Grid-Search über eine einheitliche Hidden Size je Tiefe wird hier bewusst jeder Layer unabhängig aus den drei Größen 64, 128 und 256 Hidden Units gewählt. Dadurch werden nicht nur gleichmäßig dimensionierte Netze untersucht, sondern auch ungleichmäßige Architekturen, deren Layer-Größe über die Tiefe hinweg zu- oder abnimmt, was den durchsuchten Konfigurationsraum gegenüber einer reinen Breite-mal-Tiefe-Rasterung deutlich erweitert.
 
-Das globale Optimum des Experiments verortet sich in den 2-Layer-Architekturen, welche im Durchschnitt den geringsten Test-Fehler (0.0205) aufweisen. 
-Als beste Einzelkonfiguration kristallisierte sich ein Netzwerk mit 96 Neuronen im ersten und 64 Neuronen im zweiten Hidden Layer heraus (Test-\gls{MSE}: 0.0197 bei 61.697 Parametern). 
-Das finale Modell für das \gls{BC} wird folglich als 2-Layer-\gls{GRU} mit dieser asymmetrischen Trichterstruktur (Funnel-Design) dimensioniert. 
-Dieses Layout ist konzeptionell äußerst vorteilhaft: Der breitere erste Layer extrahiert komplexe, hochfrequente zeitliche Kausalitäten aus dem acht-dimensionalen Input-Strom. 
-Der darauffolgende, schmalere Layer agiert als ,,Information Bottleneck''. 
-Er zwingt das Modell, die extrahierten Informationen auf die essenziellen physikalischen Treiber zu komprimieren, bevor die finale Vorhersageschicht den kontinuierlichen Stellwert generiert. 
-Dieses Design bietet das ideale Verhältnis aus Repräsentationskapazität und inhärenter Regularisierung.
+Die Anzahl der Layer wird dabei von 1 bis 4 variiert, wobei jeder Layer unabhängig aus den drei möglichen Hidden Sizes gewählt werden kann. Daraus ergeben sich insgesamt 120 unterschiedliche Netzwerkkonfigurationen, die im Rahmen dieser Experimentstufe verglichen werden.
 
-\subsection{Loss-Funktion und Optimizer}
-\label{subsec:loss_und_optimizer}
+Sämtliche übrigen Rahmenparameter werden unverändert aus \autoref{tab:feste_rahmenparameter} übernommen, um eine faire Vergleichbarkeit der 120 Konfigurationen sicherzustellen. Jede Konfiguration wird über 10 Epochen trainiert und bewertet; das Testset bleibt -- wie bei allen Experimentstufen dieses Kapitels -- vollständig unangetastet, um seine Aussagekraft für die abschließende Evaluation in Kapitel~\ref{sec:evaluation} zu erhalten.
 
-Die finale Prädiktionsgüte der neu ausgewählten 2-Layer-\gls{GRU}-Architektur (96-64 Neuronen) wird im hochdimensionalen Parameterraum maßgeblich von der mathematischen Fehlerbewertung (Verlustfunktion) sowie der algorithmischen Optimierungsstrategie determiniert. 
-Um die optimale Konfiguration für diese tiefe Netzwerkstruktur zu ermitteln, wurde eine erneute systematische Grid-Search-Evaluation auf dem Test-Datensatz durchgeführt. 
-Hierbei wurden etablierte Regressions-Losses (\gls{MSE}, \gls{MAE}, Huber, Log-Cosh, Smooth L1) in Kombination mit klassischen und adaptiven Optimizern (\gls{SGD}, \gls{Adam}, \gls{AdamW}, \gls{RMSprop}, \gls{Adagrad}) getestet. 
-Das Training erfolgte analog zur initialen Architekturauswahl rein auf Basis der unregularisierten \gls{GRU} über 10 Epochen und auf 20\,\% des Gesamtdatensatzes, um die Performance-Unterschiede der Algorithmen isoliert und datengetrieben bewerten zu können.
+Die Bewertung der 120 Konfigurationen erfolgt anschließend nach demselben, in Abschnitt~\ref{subsec:experimentelles_vorgehen} eingeführten Ranking-Verfahren über die fünf Validierungsmetriken $R^2$, \gls{RMSE}, \gls{MAE}, Richtungs-Accuracy und Toleranz-Accuracy.
 
-Die empirischen Ergebnisse dieser Evaluation sind in Form einer Heatmap in Abbildung \ref{fig:loss_optimizer_heatmap} visualisiert. 
-Die spaltenweise Analyse der Verlustfunktionen zeigt, dass der Huber-Loss im aggregierten Durchschnitt über alle Optimizer hinweg die höchste Stabilität und den besten mittleren Test-\gls{MSE} (0.0247) aufweist. 
-Dennoch liefert der klassische Standard-\gls{MSE} in Kombination mit dem \gls{Adam}-Optimizer den absolut geringsten Einzel-Fehlerwert des gesamten Experiments (Test-\gls{MSE} von 0.0236). 
-Klassische Fehlerfunktionen zeigen sich ansonsten anfälliger für die Wahl des Optimizers, wie die deutlichen Schwankungen in der Matrix belegen.
+\subsubsection{Ergebnisse und Auswahl der Netzwerkgröße}
+\label{subsubsec:dimensionierung_ergebnisse}
 
-\begin{figure}[htbp]
+Von den insgesamt 120 vorgesehenen Netzwerkkonfigurationen wurden alle vollständig trainiert und anhand der Rangsumme über die vier Validierungsmetriken \gls{MSE}, \gls{RMSE}, \gls{MAE} und $R^2$ bewertet. Die dabei bestbewertete Konfiguration ist die vierschichtige Architektur 256-256-256-128 mit rund 1,53 Millionen Parametern. Auf dem zweiten Rang folgt mit 128-64-256-128 eine ebenfalls vierschichtige, jedoch deutlich kompaktere Konfiguration mit rund 650.000 Parametern -- weniger als der Hälfte der Parameteranzahl der erstplatzierten Architektur. \autoref{tab:dimensionierung_top2} stellt beide Kandidaten im Detail gegenüber.
+
+\begin{table}[h]
     \centering
-    \includegraphics[width=\textwidth]{heatmap_test_mse.png}
-    \caption{Heatmap der Test-\gls{MSE}-Werte für die systematische Grid-Search-Evaluation unterschiedlicher Loss-Funktionen und Optimizer-Strategien auf Basis der unregularisierten 2-Layer-\gls{GRU}-Architektur.}
-    \label{fig:loss_optimizer_heatmap}
+    \small
+    \caption[Beste Netzwerkkonfigurationen]{Vergleich der beiden bestplatzierten Netzwerkkonfigurationen dieser Experimentstufe.}
+    \label{tab:dimensionierung_top2}
+    \begin{tabularx}{\textwidth}{@{} l >{\raggedright\arraybackslash}p{3.0cm} X X X X @{}}
+        \toprule
+        \textbf{Rang} & \textbf{Konfiguration} & \textbf{Rangsumme} & \textbf{Val MSE} & \textbf{Val RMSE} & \textbf{Val $R^2$} \\
+        \midrule
+        1 & \mbox{256-256-256-128} & 34 & 0,029233 & 0,170977 & 0,0675 \\
+        2 & 128-64-256-128  & 67 & 0,029393 & 0,171443 & 0,0624 \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+Der Vergleich der beiden Konfigurationen zeigt eine auffällige Diskrepanz: Während sich die Parameteranzahl um mehr als das Doppelte unterscheidet, fällt der Unterschied in der tatsächlichen Validierungsgüte marginal aus. Der \gls{MSE} steigt von der ersten zur zweiten Konfiguration lediglich um rund 0,5\,\%, der \gls{RMSE} um weniger als 0,3\,\%, und auch der $R^2$-Wert sinkt nur geringfügig von 0,0675 auf 0,0624. Mit mehr als doppelt so vielen Parametern erkauft sich die rangbeste Konfiguration also einen kaum messbaren Genauigkeitsgewinn.
+
+Vor dem Hintergrund der in Abschnitt~\ref{sec:overfitting_praevention} dargelegten Zusammenhänge zwischen Modellkapazität und Generalisierungsfähigkeit wird für die weitere Arbeit bewusst nicht die rangbeste, sondern die zweitplatzierte Konfiguration 128-64-256-128 gewählt. Diese Entscheidung wird durch zwei Beobachtungen gestützt: Erstens ist der Unterschied in der Validierungsgüte zwischen beiden Kandidaten praktisch vernachlässigbar. Zweitens benötigt die gewählte Konfiguration mit rund 650.000 Parametern deutlich weniger als die Hälfte der Parameter der rangbesten Architektur, was das Risiko einer Überanpassung an streckenspezifische Eigenheiten der Trainingsdaten -- die zentrale, in Kapitel~\ref{sec:theoretische_grundlagen} formulierte Gefahr dieser Arbeit -- reduziert. Die Architektur 128-64-256-128 -- ein \gls{LSTM} mit vier Layern und den Hidden Sizes 128, 64, 256 und 128 -- bildet damit die Grundlage für den nachfolgenden Vergleich von Optimierer und Verlustfunktion in Abschnitt~\ref{subsec:optimizer_loss}.
+
+\subsection{Optimierer und Verlustfunktion}
+\label{subsec:optimizer_loss}
+
+\subsubsection{Versuchsaufbau}
+\label{subsubsec:optimizer_loss_sweep}
+
+Nachdem in Abschnitt~\ref{subsec:dimensionierung} mit dem vierschichtigen \gls{LSTM} der Konfiguration 128-64-256-128 sowohl die Architektur als auch die Netzwerkgröße festgelegt wurden, widmet sich diese dritte und letzte Experimentstufe der Wahl von Optimierer und Verlustfunktion. Die zuvor bestimmte Architektur wird dabei unverändert übernommen und dient als gemeinsame Grundlage für alle im Folgenden verglichenen Kombinationen.
+
+Verglichen werden drei in der Praxis etablierte Optimierer -- \gls{Adam}, \gls{RMSprop} und \gls{Adagrad} -- in Kombination mit vier Verlustfunktionen -- \gls{MAE}, \gls{MSE}, Smooth-L1 sowie Huber-Loss. Daraus ergeben sich insgesamt zwölf zu vergleichende Konfigurationen. Während \gls{Adam} bereits in den vorangegangenen beiden Experimentstufen als Optimierer und \gls{MSE} als Verlustfunktion verwendet wurden, wird mit diesem Vergleich überprüft, ob diese zunächst als neutraler Ausgangspunkt gewählte Kombination tatsächlich auch die für die vorliegende Aufgabe geeignetste ist, oder ob eine der Alternativen -- insbesondere im Hinblick auf die in Abschnitt~\ref{sec:sl_grundlagen} diskutierte Ausreißeranfälligkeit des \gls{MSE} -- zu einer robusteren beziehungsweise besser konvergierenden Kombination führt.
+
+Sämtliche übrigen Rahmenparameter bleiben unverändert wie in \autoref{tab:feste_rahmenparameter} festgelegt. Trainiert wird über 10 Epochen; das Testset bleibt auch in dieser letzten Experimentstufe vollständig unangetastet.
+
+Die Bewertung der zwölf Kombinationen erfolgt anschließend wieder nach dem in Abschnitt~\ref{subsec:experimentelles_vorgehen} eingeführten Ranking-Verfahren über die Validierungsmetriken.
+
+\subsubsection{Ergebnisse und Auswahl der Optimierer-Loss-Kombination}
+\label{subsubsec:optimizer_loss_ergebnisse}
+
+Von den zwölf verglichenen Kombinationen aus Optimierer und Verlustfunktion zeigt \autoref{tab:optimizer_loss_ranking} das vollständige Ranking nach der in Abschnitt~\ref{subsec:experimentelles_vorgehen} eingeführten Rangsumme über alle fünf Validierungsmetriken.
+
+\begin{table}[h]
+    \centering
+    \small
+    \caption[Ranking der Optimizer-Loss-Kombinationen]{Vollständiges Ranking der zwölf Optimizer-Loss-Kombinationen nach Rangsumme über alle fünf Validierungsmetriken; RMSE und MAE sind zur Orientierung zusätzlich angegeben.}
+    \label{tab:optimizer_loss_ranking}
+    \begin{tabularx}{\textwidth}{@{} l X X X X X @{}}
+        \toprule
+        \textbf{Rang} & \textbf{Optimizer} & \textbf{Loss} & \textbf{Rangsumme} & \textbf{RMSE} & \textbf{MAE} \\
+        \midrule
+        1  & Adam     & Smooth-L1 & 10 & 0,1719 & 0,0958 \\
+        2  & RMSprop  & Huber     & 19 & 0,1740 & 0,0983 \\
+        3  & RMSprop  & MAE       & 22 & 0,1751 & 0,0925 \\
+        4  & Adam     & MAE       & 24 & 0,1750 & 0,0946 \\
+        5  & Adam     & Huber     & 26 & 0,1748 & 0,0996 \\
+        6  & RMSprop  & Smooth-L1 & 32 & 0,1777 & 0,0994 \\
+        7  & Adam     & MSE       & 33 & 0,1735 & 0,1032 \\
+        8  & RMSprop  & MSE       & 35 & 0,1727 & 0,1044 \\
+        9  & Adagrad  & Huber     & 35 & 0,1763 & 0,1041 \\
+        10 & Adagrad  & MAE       & 46 & 0,1784 & 0,0999 \\
+        11 & Adagrad  & Smooth-L1 & 48 & 0,1770 & 0,1052 \\
+        12 & Adagrad  & MSE       & 60 & 0,1790 & 0,1151 \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+Als beste Kombination geht \gls{Adam} in Verbindung mit dem Smooth-L1-Loss mit einer Rangsumme von 10 hervor.
+
+Um die relative Güte aller zwölf Kombinationen zusätzlich auf einen Blick erfassbar zu machen, wird ein kombinierter Validierungs-Score gebildet. Bezeichnen $A_{\text{Richt}}$ die Richtungs-Accuracy und $A_{\text{Tol}}$ die Toleranz-Accuracy einer Konfiguration, so ergibt sich der Score als deren arithmetisches Mittel:
+\begin{equation}
+    \text{Score} = \frac{A_{\text{Richt}} + A_{\text{Tol}}}{2}
+    \label{eq:val_score}
+\end{equation}
+Der Score fasst damit zwei ergänzende Genauigkeitsaspekte -- die Vorzeichentreue der Vorhersage sowie ihre Nähe zum tatsächlichen Labelwert -- in einer einzigen, leicht interpretierbaren Prozentzahl zusammen.
+
+\autoref{fig:optimizer_loss_heatmap} zeigt diesen Score als Heatmap über die drei Optimierer (Zeilen) und vier Verlustfunktionen (Spalten). Jede Zelle enthält den resultierenden Score in Prozent; dunklere Farben entsprechen dabei einem höheren Score. Der höchste Wert der gesamten Heatmap (67,56\,\%) liegt in der Zelle Adam/Smooth-L1, der niedrigste Wert (56,52\,\%) in der Zelle Adagrad/MSE. Über alle vier Verlustfunktionen hinweg fallen die Zellen der Zeile Adagrad merklich heller aus als die der Zeilen Adam und RMSprop; innerhalb dieser beiden Zeilen ist wiederum die Spalte MSE durchgehend die hellste.
+
+Diese Verteilung bestätigt das aus der Rangsumme abgeleitete Bild: \gls{Adagrad} fällt über alle vier Verlustfunktionen hinweg deutlich gegenüber \gls{Adam} und \gls{RMSprop} ab, während innerhalb von \gls{Adam} und \gls{RMSprop} der \gls{MSE} durchgehend die schwächste, robustere Verlustfunktionen wie Huber und Smooth-L1 hingegen tendenziell die stärkeren Ergebnisse liefern. Der beste einzelne Wert der gesamten Heatmap entfällt exakt auf die Kombination \gls{Adam} und Smooth-L1 und bestätigt damit optisch die zuvor über die Rangsumme getroffene Auswahl.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\textwidth]{heatmap_val_score.png}
+    \caption[Val-Score-Heatmap für Optimierer und Verlustfunktion]{Kombinierter Validierungs-Score (arithmetisches Mittel aus Richtungs- und Toleranz-Accuracy, vgl. Gleichung~\eqref{eq:val_score}) für alle zwölf Kombinationen aus Optimierer und Verlustfunktion. Dunklere Farben entsprechen einem höheren Score; die beste Kombination Adam/Smooth-L1 erreicht 67,56\,\%, die schwächste Kombination Adagrad/MSE 56,52\,\%.}
+    \label{fig:optimizer_loss_heatmap}
 \end{figure}
 
-Die zeilenweise Auswertung der Optimierungsalgorithmen offenbart ein noch prägnanteres Leistungsgefälle. Das klassische Stochastische Gradientenabstieg-Verfahren (\gls{SGD}) versagt in diesem Setup unabhängig von der gewählten Loss-Funktion komplett und weist die signifikant schlechteste Generalisierung auf (dunkelviolette Zeile mit Werten von bis zu 0.0279 beim \gls{MSE}). 
-Adaptive Algorithmen dominieren das Feld sichtbar und stabilisieren das Training auf einem durchgehend höheren Niveau. 
-\gls{Adagrad} besticht dabei durch eine enorme Konstanz über alle Fehlerfunktionen hinweg und erzielt den besten mittleren Test-\gls{MSE} der Optimizer-Familien (0.0241). 
-\gls{RMSprop} zeigt mit \gls{MAE} und Log-Cosh (jeweils unter 0.0240) ebenfalls extrem starke Resultate. 
-Dennoch erreicht die \gls{Adam}-Variante in der Spitze das absolute globale Optimum.
+Aggregiert man die Ergebnisse zusätzlich über die jeweilige mittlere Rangsumme je Optimierer beziehungsweise je Verlustfunktion, bestätigt sich dieses Bild: \gls{Adam} erzielt mit einer mittleren Rangsumme von 23{,}2 über alle vier getesteten Verlustfunktionen hinweg das beste Ergebnis, knapp gefolgt von \gls{RMSprop} (27{,}0), während \gls{Adagrad} mit 47{,}2 deutlich abfällt. Bei den Verlustfunktionen liegt der Huber-Loss mit einer mittleren Rangsumme von 26{,}7 vorn, gefolgt von Smooth-L1 (30{,}0) und \gls{MAE} (30{,}7), während der klassische \gls{MSE} mit 42{,}7 mit deutlichem Abstand die schlechteste mittlere Platzierung erzielt.
 
-Basierend auf dieser direkten Auswertung der Heatmap wird das finale \gls{BC}-Modell mit dem \gls{Adam}-Optimizer und dem \gls{MSE}-Loss kompiliert. 
-Diese Konfiguration stellt empirisch belegt die maximale Vorhersagegüte für die nun tiefer dimensionierte Netzwerkstruktur sicher.
+Bemerkenswert ist dabei, dass zwar der Huber-Loss im Mittel die beste Verlustfunktion darstellt, die tatsächlich beste Einzelkombination jedoch nicht \gls{Adam} mit Huber (Rang 5), sondern \gls{Adam} mit Smooth-L1 ist. Da Smooth-L1 mathematisch eng mit dem Huber-Loss verwandt ist -- beide kombinieren die für kleine Fehler glatten, gut optimierbaren Eigenschaften des \gls{MSE} mit der Ausreißerrobustheit des \gls{MAE}, wie in Abschnitt~\ref{sec:sl_grundlagen} theoretisch hergeleitet --, ist diese Nähe plausibel und keine widersprüchliche Einzelbeobachtung. In der Gesamtschau bestätigt der Vergleich damit deutlich die bereits in Kapitel~\ref{sec:theoretische_grundlagen} und anhand der schiefen, extremwertbehafteten Labelverteilung in Abschnitt~\ref{subsubsec:feature_auswahl} begründete Erwartung, dass eine robuste, gegenüber Ausreißern unempfindlichere Verlustfunktion dem klassischen \gls{MSE} überlegen ist: Der \gls{MSE} bildet sowohl im Einzel- als auch im Aggregat-Ranking durchgehend das Schlusslicht.
 
+Auf Basis dieser Ergebnisse werden \gls{Adam} als Optimierer und Smooth-L1 als Verlustfunktion für das weitere Training ausgewählt. Damit liegen nun sämtliche in diesem Kapitel zu treffenden Konzeptionsentscheidungen vor; sie werden im nachfolgenden Abschnitt~\ref{subsec:finale_konfiguration} abschließend zusammengefasst.
 
+\subsection{Finale Modellkonfiguration}
+\label{subsec:finale_konfiguration}
+
+Der dreistufige, trichterförmige Auswahlprozess dieses Kapitels führte zu drei aufeinander aufbauenden, empirisch abgesicherten Entscheidungen: Zunächst wurde in Abschnitt~\ref{subsec:architekturauswahl} das \gls{LSTM} als geeignetste Architektur gegenüber \gls{MLP} und \gls{GRU} identifiziert. Darauf aufbauend wurde in Abschnitt~\ref{subsec:dimensionierung} mit der Konfiguration 128-64-256-128 eine vierschichtige, bewusst kompakt gehaltene Dimensionierung gewählt, die nahezu dieselbe Validierungsgüte wie die rangbeste, aber mehr als doppelt so große Konfiguration erreicht und damit das Overfitting-Risiko reduziert. Abschließend wurde in Abschnitt~\ref{subsec:optimizer_loss} mit \gls{Adam} und Smooth-L1 die Kombination aus Optimierer und Verlustfunktion bestimmt, die über alle fünf Validierungsmetriken hinweg am konsistentesten abschnitt. \autoref{tab:finale_konfiguration} fasst diese drei Entscheidungen als finale Modellkonzeption zusammen.
+
+\begin{table}[h]
+    \centering
+    \small
+    \caption[Finale Modellkonfiguration]{Finale Modellkonfiguration als Ergebnis der drei Experimentstufen.}
+    \label{tab:finale_konfiguration}
+    \begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} p{7.5cm} p{7.5cm}}
+        \toprule
+        \textbf{Konzeptionsentscheidung} & \textbf{Ausprägung} \\
+        \midrule
+        Architektur              & LSTM \\
+        Layer-Konfiguration      & 128-64-256-128 (4 Layer) \\
+        Parameteranzahl          & 650.369 \\
+        Optimierer               & Adam \\
+        Verlustfunktion          & Smooth-L1 \\
+        \bottomrule
+    \end{tabular*}
+\end{table}
+
+Damit ist die strukturelle Konzeption des Modells vollständig festgelegt. Wie einleitend in Abschnitt~\ref{sec:konzeption} klargestellt, wurden die eigentlichen Trainings-Hyperparameter -- Lernrate, Batch-Size, Weight Decay und Dropout-Rate -- während sämtlicher Experimentstufen bewusst auf feste, plausible Startwerte gesetzt (vgl. \autoref{tab:feste_rahmenparameter}) und nicht mitoptimiert, um die Vergleichbarkeit der jeweils untersuchten Entscheidung sicherzustellen. Die hier festgelegte Architektur, Dimensionierung sowie die Wahl von Optimierer und Verlustfunktion bilden somit den Ausgangspunkt für das nachfolgende Kapitel~\ref{sec:training}, in dem auf dieser festen Modellkonzeption aufbauend die verbleibenden Trainings-Hyperparameter systematisch optimiert und das finale Modell auf dem vollständigen Trainingsdatensatz trainiert wird.

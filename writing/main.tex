@@ -1,6 +1,7 @@
 \documentclass[a4paper,12pt]{article}
 
 \input{frontmatter/settings}
+\input{frontmatter/listings-style}
 
 % Bilder Verzeichnis einbinden
 \graphicspath{{images/}}
@@ -43,7 +44,7 @@
 
     % Inhaltsverzeichnis
     \tableofcontents
-    \newpage
+
 
     % Abkürzungsverzeichnis
      % Abkürzungsverzeichnis
@@ -60,6 +61,7 @@
     % Abbildungsverzeichnis
     \phantomsection
     \listoffigures
+    \newpage
     
     % Tabellenverzeichnis
     \phantomsection
@@ -99,5 +101,27 @@
     \sloppy % Lockert die Anforderungen an die Zeilenlänge
     \raggedright
     \printbibliography[title=Literaturverzeichnis,heading=bibnumbered]
+    \newpage
+    % Anhang
+    \appendix
+    \section{Nutzung von Künstlicher Intelligenz}
+    \label{sec:anhang-ki}
+
+    \begin{table}[htbp]
+        \centering
+        \refstepcounter{table}
+        \label{tab:ki-nutzung}
+        \vspace{0.5em}
+        \begin{tabular}{p{0.28\textwidth} p{0.62\textwidth}}
+            \toprule
+            \textbf{Hilfsmittel} & \textbf{Verwendung} \\
+            \midrule
+            Gemini Pro 3.1 & Planung und Strukturierung der Arbeitsweise \\
+            Gemini Flash 3.7 & Schnelle Fragenbeantwortung und Verständnisfragen \\
+            Claude Sonnet 5 & Hilfe bei Formulierungen \\
+            Claude Opus 4.8 in GitHub Copilot & Codegenerierung sowie Hilfe beim Debugging und Code-Fixing \\
+            \bottomrule
+        \end{tabular}
+    \end{table}
 
 \end{document}

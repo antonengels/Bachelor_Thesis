@@ -102,10 +102,18 @@ TRIP_BRAKE_COLUMN = "M_ATO_RTBRq"
 TRIP_REQUIRED_KEYS: frozenset[str] = frozenset({TRIP_SPEED_KEY, TRIP_BRAKE_KEY})
 
 DEFAULT_TRIP_SPLIT = True
-DEFAULT_TRIP_STANDSTILL_MINUTES = 5.0
-DEFAULT_TRIP_MIN_DURATION_MINUTES = 5.0
+# A standstill separates two trips once the train stands still (speed ~0 and
+# lever <= 0) for at least this long. 0.5 min = 30 s.
+DEFAULT_TRIP_STANDSTILL_MINUTES = 0.5
+# Keep this much of the standstill inside the neighbouring trips (10 s before and
+# after each stop) so every trip still begins and ends around v = 0.
+DEFAULT_TRIP_STANDSTILL_PAD_SECONDS = 10.0
+# Drop trips shorter than this (40 s minimum).
+DEFAULT_TRIP_MIN_DURATION_MINUTES = 40.0 / 60.0
+# V_EST ~ 0 tolerance (raw cm/s). 5 cm/s ~ 0.18 km/h.
 DEFAULT_TRIP_SPEED_THRESHOLD = 5.0
-DEFAULT_TRIP_BRAKE_THRESHOLD = 82.0
+# Lever 0 or less: standstill requires M_ATO_RTBRq <= this (no traction command).
+DEFAULT_TRIP_BRAKE_THRESHOLD = 0.0
 # Split a trip whenever the recorded data has a temporal gap longer than this
 # (no packets at all). 0 disables gap-based splitting. This prevents the long
 # intra-trip data gaps observed in the EDA (e.g. multi-hour holes).
@@ -240,6 +248,7 @@ class TripSplitConfig:
 
     enabled: bool = DEFAULT_TRIP_SPLIT
     standstill_min_minutes: float = DEFAULT_TRIP_STANDSTILL_MINUTES
+    standstill_pad_seconds: float = DEFAULT_TRIP_STANDSTILL_PAD_SECONDS
     min_trip_minutes: float = DEFAULT_TRIP_MIN_DURATION_MINUTES
     speed_threshold: float = DEFAULT_TRIP_SPEED_THRESHOLD
     brake_threshold: float = DEFAULT_TRIP_BRAKE_THRESHOLD
@@ -1067,7 +1076,15 @@ def _find_standstill_ranges_ms(
     brake_signal: pd.Series,
     cfg: TripSplitConfig,
 ) -> list[tuple[int, int]]:
-    """Return standstill intervals [start_ms, end_ms) based on both signals."""
+    """Return standstill separator intervals [start_ms, end_ms).
+
+    A standstill needs ``speed < speed_threshold`` (v ~ 0) and
+    ``brake <= brake_threshold`` (lever 0 or less) for at least
+    ``standstill_min_minutes``. The returned interval is shrunk by
+    ``standstill_pad_seconds`` on each side so that much of the stop stays inside
+    the neighbouring trips (trip begins/ends around v = 0); only the inner part
+    is used as a trip separator.
+    """
     if speed_signal.empty or brake_signal.empty:
         return []
 
@@ -1088,12 +1105,13 @@ def _find_standstill_ranges_ms(
     brake_values = signal["brake"].to_numpy(dtype=np.float64, copy=False)
     standstill_mask = (
         (speed_values < cfg.speed_threshold)
-        & (brake_values < cfg.brake_threshold)
+        & (brake_values <= cfg.brake_threshold)
     )
     if not standstill_mask.any():
         return []
 
     min_duration_ms = max(0, int(round(cfg.standstill_min_minutes * 60_000)))
+    pad_ms = max(0, int(round(cfg.standstill_pad_seconds * 1000)))
     ranges: list[tuple[int, int]] = []
     idx = 0
     size = len(timestamps)
@@ -1114,7 +1132,13 @@ def _find_standstill_ranges_ms(
         )
         start_ts = int(timestamps[start_idx])
         if end_exclusive - start_ts >= min_duration_ms:
-            ranges.append((start_ts, end_exclusive))
+            # Keep ``pad_ms`` of the standstill inside the neighbouring trips so
+            # each trip still begins and ends around v = 0; only the inner part
+            # of a long stop is removed as a separator.
+            padded_start = start_ts + pad_ms
+            padded_end = end_exclusive - pad_ms
+            if padded_end > padded_start:
+                ranges.append((padded_start, padded_end))
         idx += 1
     return ranges
 
@@ -1703,26 +1727,34 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument("--trip-standstill-minutes", type=float,
                         default=DEFAULT_TRIP_STANDSTILL_MINUTES,
                         help=(
-                            "Split at standstill when speed and brake stay below "
-                            "thresholds for at least this many minutes. Default: 5.0"
+                            "Split at a standstill when speed (~0) and lever "
+                            "(M_ATO_RTBRq <= 0) stay below thresholds for at least "
+                            "this many minutes. Default: 0.5 (30 s)."
+                        ))
+    parser.add_argument("--trip-standstill-pad-seconds", type=float,
+                        default=DEFAULT_TRIP_STANDSTILL_PAD_SECONDS,
+                        help=(
+                            "Keep this many seconds of the standstill inside the "
+                            "neighbouring trips (before/after each stop) so a trip "
+                            "still begins and ends around v=0. Default: 10."
                         ))
     parser.add_argument("--trip-min-duration-minutes", type=float,
                         default=DEFAULT_TRIP_MIN_DURATION_MINUTES,
                         help=(
                             "Keep only trips with at least this duration in minutes. "
-                            "Default: 5.0"
+                            "Default: 0.667 (40 s)."
                         ))
     parser.add_argument("--trip-speed-threshold", type=float,
                         default=DEFAULT_TRIP_SPEED_THRESHOLD,
                         help=(
-                            "Standstill speed threshold in raw units. "
-                            "Default: 5.0 (approx. 0.05 m/s when raw/100)."
+                            "Standstill speed tolerance in raw units (V_EST ~ 0). "
+                            "Default: 5.0 (approx. 0.18 km/h)."
                         ))
     parser.add_argument("--trip-brake-threshold", type=float,
                         default=DEFAULT_TRIP_BRAKE_THRESHOLD,
                         help=(
-                            "Standstill brake-lever threshold in raw units. "
-                            "Default: 82 (approx. 0.005 when raw/16384)."
+                            "Standstill lever threshold in raw units: a stop needs "
+                            "M_ATO_RTBRq <= this (lever 0 or less). Default: 0."
                         ))
     parser.add_argument("--trip-max-gap-seconds", type=float,
                         default=DEFAULT_TRIP_MAX_GAP_SECONDS,
@@ -1756,6 +1788,8 @@ def main(argv=None) -> None:
 
     if args.trip_standstill_minutes < 0:
         sys.exit("ERROR: --trip-standstill-minutes must be >= 0")
+    if args.trip_standstill_pad_seconds < 0:
+        sys.exit("ERROR: --trip-standstill-pad-seconds must be >= 0")
     if args.trip_min_duration_minutes < 0:
         sys.exit("ERROR: --trip-min-duration-minutes must be >= 0")
     if args.trip_speed_threshold < 0:
@@ -1774,6 +1808,7 @@ def main(argv=None) -> None:
     trip_split_config = TripSplitConfig(
         enabled=args.trip_split,
         standstill_min_minutes=args.trip_standstill_minutes,
+        standstill_pad_seconds=args.trip_standstill_pad_seconds,
         min_trip_minutes=args.trip_min_duration_minutes,
         speed_threshold=args.trip_speed_threshold,
         brake_threshold=args.trip_brake_threshold,

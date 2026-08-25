@@ -2,31 +2,36 @@ r"""
 Vergleich klassischer Sequenz-Architekturen fuer die ATO-Stellsignal-Vorhersage.
 
 Aufgabe (Forecasting / Behavioral Cloning):
-    Gegeben eine HISTORIE der letzten H Zeitschritte der 8 Beobachtungs-Features,
+    Gegeben eine HISTORIE der letzten H Zeitschritte der 13 Beobachtungs-Features,
     sage das ATO-Stellsignal `label` in [-1,1] (pos=Beschl., neg=Bremsen) voraus.
     Standardmaessig wird das Label `horizon` Schritte nach dem letzten
     Beobachtungszeitpunkt vorhergesagt (horizon=25 -> 5 s in die Zukunft).
 
 Verglichene Architekturen:
-    - MLP  : klassisches Feed-Forward-Netz auf dem geflatteten History-Fenster.
-    - LSTM : klassisches Long-Short-Term-Memory-Netz.
-    - GRU  : klassisches Gated-Recurrent-Unit-Netz.
+    - MLP  : Feed-Forward-Netz, Hidden-Basis 6, 15.697 Parameter.
+    - LSTM : einschichtiges LSTM, Hidden-Size 54, 14.959 Parameter.
+    - GRU  : einschichtige GRU, Hidden-Size 63, 14.806 Parameter.
+
+    Die Hidden-Groessen sind modellindividuell gewaehlt, damit alle Modelle
+    ein vergleichbares Budget von ungefaehr 15.000 lernbaren Parametern haben.
 
 Ziel dieses Skripts:
-    Auf einem KLEINEN Teil (Standard: 25 %) der Trainings- und Validierungsdaten
+    Auf 50 % der Trainings- und Validierungsdaten
     trainieren, um zu entscheiden, mit welcher Architektur weitergearbeitet wird.
+    Alle Modelle werden 10 Epochen mit Adam, MSE, Dropout=0.45 und L2=1e-4
+    unter denselben Bedingungen trainiert.
     Erzeugt einen self-contained HTML-Report mit den wichtigsten Plots
     (u.a. Label real vs. predicted pro Modell).
 
-Aufruf (Schnell-Auswahl auf 25 % der Daten):
+Aufruf (Auswahl auf 50 % der Daten):
     .\.venv\Scripts\python.exe src\model_comparison.py
 
 Weitere Optionen:
     --full            gesamte Trainings-/Val-Daten verwenden (Fraction=1.0)
-    --fraction 0.25   Anteil der Trips je Split (Standard 0.25)
-    --epochs 16       Anzahl Trainingsepochen
-    --seq-len 30      Laenge der History (Zeitschritte; 30 = 6 s @ 5 Hz)
-    --horizon 25      Vorhersagehorizont in Schritten (25 = 5 s)
+    --fraction 0.5    Anteil der Trips je Split (Standard 0.5)
+    --epochs 10       Anzahl Trainingsepochen
+    --seq-len 100     Laenge der History (Zeitschritte; 100 = 20 s @ 5 Hz)
+    --horizon 50      Vorhersagehorizont in Schritten (50 = 10 s)
     --stride 5        Schrittweite beim Fensterbau (weniger = mehr Fenster)
 """
 
@@ -62,10 +67,15 @@ FEATURES = [
     "V_PERMITTED",
     "A_EST",
     "A_GRADIENT",
+    "D_STPDISTANCE",
+    "a_num",
+    "jerk",
+    "v_headroom",
     "v_ratio",
     "a_est_roll_mean_2s",
     "v_roll_std_2s",
     "stop_proximity",
+    "grad_x_v",
 ]
 LABEL_COL = "label"
 UNIT_COL = "unit"
@@ -84,21 +94,23 @@ MODEL_COLORS = {"MLP": "#4C72B0", "LSTM": "#DD8452", "GRU": "#55A868"}
 # ---------------------------------------------------------------------------
 @dataclass
 class Config:
-    seq_len: int = 30
-    horizon: int = 25
+    seq_len: int = 100
+    horizon: int = 50
     stride: int = 5
-    fraction: float = 0.25
+    fraction: float = 0.5
     epochs: int = 10
-    batch_size: int = 128
-    hidden: int = 64
-    lr: float = 1e-3
-    seed: int = 42
+    batch_size: int = 2048
+    mlp_hidden: int = 6
+    lstm_hidden: int = 54
+    gru_hidden: int = 63
+    lr: float = 1e-4
+    dropout: float = 0.45
+    weight_decay: float = 1e-4
+    seed: int = 2
     max_train_trips: int | None = None
     max_val_trips: int | None = None
-    max_test_trips: int | None = None
     max_train_windows: int | None = None
     max_val_windows: int | None = None
-    max_test_windows: int | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -159,12 +171,7 @@ def build_trip_arrays(
     n_keep = max(1, int(round(len(all_units) * cfg.fraction)))
     kept = all_units[:n_keep]
 
-    if split == "train":
-        cap = cfg.max_train_trips
-    elif split == "val":
-        cap = cfg.max_val_trips
-    else:
-        cap = cfg.max_test_trips
+    cap = cfg.max_train_trips if split == "train" else cfg.max_val_trips
     if cap is not None:
         kept = kept[:cap]
     kept_set = set(kept)
@@ -193,14 +200,16 @@ def cap_dataset(ds: SequenceDataset, max_windows: int | None, rng: np.random.Gen
 # Modelle
 # ---------------------------------------------------------------------------
 class MLPRegressor(nn.Module):
-    def __init__(self, seq_len: int, n_features: int, hidden: int):
+    def __init__(self, seq_len: int, n_features: int, hidden: int, dropout: float):
         super().__init__()
         self.net = nn.Sequential(
             nn.Flatten(),
             nn.Linear(seq_len * n_features, hidden * 2),
             nn.ReLU(),
+            nn.Dropout(dropout),
             nn.Linear(hidden * 2, hidden),
             nn.ReLU(),
+            nn.Dropout(dropout),
             nn.Linear(hidden, 1),
         )
 
@@ -209,36 +218,38 @@ class MLPRegressor(nn.Module):
 
 
 class LSTMRegressor(nn.Module):
-    def __init__(self, n_features: int, hidden: int):
+    def __init__(self, n_features: int, hidden: int, dropout: float):
         super().__init__()
         self.rnn = nn.LSTM(n_features, hidden, num_layers=1, batch_first=True)
+        self.dropout = nn.Dropout(dropout)
         self.head = nn.Linear(hidden, 1)
 
     def forward(self, x):  # x: (B, H, F)
         out, _ = self.rnn(x)
         last = out[:, -1, :]
-        return torch.tanh(self.head(last)).squeeze(-1)
+        return torch.tanh(self.head(self.dropout(last))).squeeze(-1)
 
 
 class GRURegressor(nn.Module):
-    def __init__(self, n_features: int, hidden: int):
+    def __init__(self, n_features: int, hidden: int, dropout: float):
         super().__init__()
         self.rnn = nn.GRU(n_features, hidden, num_layers=1, batch_first=True)
+        self.dropout = nn.Dropout(dropout)
         self.head = nn.Linear(hidden, 1)
 
     def forward(self, x):  # x: (B, H, F)
         out, _ = self.rnn(x)
         last = out[:, -1, :]
-        return torch.tanh(self.head(last)).squeeze(-1)
+        return torch.tanh(self.head(self.dropout(last))).squeeze(-1)
 
 
 def build_model(name: str, cfg: Config) -> nn.Module:
     if name == "MLP":
-        return MLPRegressor(cfg.seq_len, len(FEATURES), cfg.hidden)
+        return MLPRegressor(cfg.seq_len, len(FEATURES), cfg.mlp_hidden, cfg.dropout)
     if name == "LSTM":
-        return LSTMRegressor(len(FEATURES), cfg.hidden)
+        return LSTMRegressor(len(FEATURES), cfg.lstm_hidden, cfg.dropout)
     if name == "GRU":
-        return GRURegressor(len(FEATURES), cfg.hidden)
+        return GRURegressor(len(FEATURES), cfg.gru_hidden, cfg.dropout)
     raise ValueError(name)
 
 
@@ -281,10 +292,8 @@ def regression_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict:
     }
 
 
-def rank_models_weighted(
-    results: list[RunResult], test_weight: float = 2.0, val_weight: float = 1.0
-) -> tuple[list[RunResult], dict[str, float]]:
-    """Gewichtetes Gesamtranking ueber alle Metriken (Test priorisiert)."""
+def rank_validation_results(results, identity) -> tuple[list, dict[str, float]]:
+    """Rangsumme aus fuenf Validierungsmetriken mit stabilen Tie-Breakern."""
     metrics = [
         ("r2", True),
         ("rmse", False),
@@ -292,33 +301,30 @@ def rank_models_weighted(
         ("dir_acc", True),
         ("tol_acc", True),
     ]
-    score = {r.name: 0.0 for r in results}
+    score = {identity(result): 0.0 for result in results}
 
     for metric_name, higher_is_better in metrics:
-        ordered_test = sorted(
-            results,
-            key=lambda r: r.test_metrics[metric_name],
-            reverse=higher_is_better,
-        )
         ordered_val = sorted(
             results,
             key=lambda r: r.metrics[metric_name],
             reverse=higher_is_better,
         )
-        for rank, res in enumerate(ordered_test, start=1):
-            score[res.name] += test_weight * rank
         for rank, res in enumerate(ordered_val, start=1):
-            score[res.name] += val_weight * rank
+            score[identity(res)] += rank
 
     ranked = sorted(
         results,
         key=lambda r: (
-            score[r.name],
-            -(test_weight * r.test_metrics["r2"] + val_weight * r.metrics["r2"]),
-            (test_weight * r.test_metrics["rmse"] + val_weight * r.metrics["rmse"]),
+            score[identity(r)],
+            -r.metrics["r2"],
+            r.metrics["rmse"],
         ),
     )
     return ranked, score
+
+
+def rank_models(results: list[RunResult]) -> tuple[list[RunResult], dict[str, float]]:
+    return rank_validation_results(results, lambda result: result.name)
 
 
 # ---------------------------------------------------------------------------
@@ -330,7 +336,6 @@ class RunResult:
     train_loss: list[float] = field(default_factory=list)
     val_loss: list[float] = field(default_factory=list)
     metrics: dict = field(default_factory=dict)
-    test_metrics: dict = field(default_factory=dict)
     y_true: np.ndarray | None = None
     y_pred: np.ndarray | None = None
     n_params: int = 0
@@ -354,10 +359,12 @@ def evaluate(model, loader, device) -> tuple[float, np.ndarray, np.ndarray, np.n
     return total / max(n, 1), np.concatenate(yt), np.concatenate(yp), np.concatenate(ypr)
 
 
-def train_one(name: str, cfg: Config, train_loader, val_loader, test_loader, device) -> RunResult:
+def train_one(name: str, cfg: Config, train_loader, val_loader, device) -> RunResult:
     torch.manual_seed(cfg.seed)
     model = build_model(name, cfg).to(device)
-    opt = torch.optim.Adam(model.parameters(), lr=cfg.lr)
+    opt = torch.optim.Adam(
+        model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay
+    )
     crit = nn.MSELoss()
     res = RunResult(name=name, n_params=count_params(model))
 
@@ -383,14 +390,10 @@ def train_one(name: str, cfg: Config, train_loader, val_loader, test_loader, dev
 
     res.train_time_s = time.time() - t0
     vl, yt, yp, ypr = evaluate(model, val_loader, device)
-    tl, yt_test, yp_test, ypr_test = evaluate(model, test_loader, device)
     res.metrics = regression_metrics(yt, yp)
-    res.test_metrics = regression_metrics(yt_test, yp_test)
     res.y_true = yt
     res.y_pred = yp
-    res._y_true_test = yt_test  # type: ignore[attr-defined]
     res._y_prev_val = ypr  # type: ignore[attr-defined]
-    res._y_prev_test = ypr_test  # type: ignore[attr-defined]
     return res
 
 
@@ -505,7 +508,7 @@ def plot_residuals(results: list[RunResult]) -> str:
 # Report
 # ---------------------------------------------------------------------------
 def build_report(
-    results: list[RunResult], cfg: Config, baseline_val: dict, baseline_test: dict, meta: dict
+    results: list[RunResult], cfg: Config, baseline_val: dict, meta: dict
 ) -> str:
     imgs = {
         "loss": plot_loss_curves(results),
@@ -515,14 +518,12 @@ def build_report(
         "residuals": plot_residuals(results),
     }
 
-    # Ranking: alle Metriken, Test priorisiert (2x) gegenueber Val (1x).
-    ranked, rank_score = rank_models_weighted(results, test_weight=2.0, val_weight=1.0)
+    ranked, rank_score = rank_models(results)
     best = ranked[0]
 
-    def row(res: RunResult, metric_key: str, show_time: bool) -> str:
-        m = res.metrics if metric_key == "val" else res.test_metrics
+    def row(res: RunResult) -> str:
+        m = res.metrics
         star = " &#11088;" if res.name == best.name else ""
-        time_cell = f"<td>{res.train_time_s:.1f}s</td>" if show_time else "<td>-</td>"
         return (
             f"<tr><td><b>{res.name}{star}</b></td>"
             f"<td>{res.n_params:,}</td>"
@@ -532,22 +533,15 @@ def build_report(
             f"<td>{m['mae']:.4f}</td>"
             f"<td>{m['dir_acc_pct']:.2f}%</td>"
             f"<td>{m['tol_acc_pct']:.2f}%</td>"
-            f"{time_cell}</tr>"
+            f"<td>{res.train_time_s:.1f}s</td></tr>"
         )
 
-    rows_val = "\n".join(row(r, "val", True) for r in ranked)
-    rows_test = "\n".join(row(r, "test", False) for r in ranked)
+    rows_val = "\n".join(row(r) for r in ranked)
     base_row_val = (
         f"<tr style='color:#888'><td><i>Persistenz (a<sub>t</sub>)</i></td><td>-</td><td>-</td>"
         f"<td>{baseline_val['r2']:.4f}</td><td>{baseline_val['rmse']:.4f}</td>"
         f"<td>{baseline_val['mae']:.4f}</td><td>{baseline_val['dir_acc_pct']:.2f}%</td>"
         f"<td>{baseline_val['tol_acc_pct']:.2f}%</td><td>-</td></tr>"
-    )
-    base_row_test = (
-        f"<tr style='color:#888'><td><i>Persistenz (a<sub>t</sub>)</i></td><td>-</td><td>-</td>"
-        f"<td>{baseline_test['r2']:.4f}</td><td>{baseline_test['rmse']:.4f}</td>"
-        f"<td>{baseline_test['mae']:.4f}</td><td>{baseline_test['dir_acc_pct']:.2f}%</td>"
-        f"<td>{baseline_test['tol_acc_pct']:.2f}%</td><td>-</td></tr>"
     )
 
     def img_block(title, key, note=""):
@@ -577,13 +571,12 @@ def build_report(
 <body>
 <h1>Architektur-Vergleich: MLP vs. LSTM vs. GRU</h1>
 <p>ATO-Stellsignal-Vorhersage aus einer Beobachtungs-History. Trainiert auf
-<b>{cfg.fraction*100:.0f}&nbsp;%</b> der Trips (Auswahl auf Validierung, finale Kennzahlen auch auf Test).</p>
+<b>{cfg.fraction*100:.0f}&nbsp;%</b> der Trainings- und Validierungs-Trips.</p>
 
 <div class="rec">
-<b>Empfehlung:</b> Mit <b>{best.name}</b> weiterarbeiten &ndash; bestes Gesamt-Ranking
-(Test 2x, Val 1x; alle Metriken). Score={rank_score[best.name]:.1f}.<br>
-Test: R&sup2;={best.test_metrics['r2']:.4f}, RMSE={best.test_metrics['rmse']:.4f}
-&middot; Val: R&sup2;={best.metrics['r2']:.4f}, RMSE={best.metrics['rmse']:.4f}.
+<b>Empfehlung:</b> Mit <b>{best.name}</b> weiterarbeiten &ndash; bestes Ranking
+auf der Validierung. Score={rank_score[best.name]:.1f}.<br>
+Val: R&sup2;={best.metrics['r2']:.4f}, RMSE={best.metrics['rmse']:.4f}.
 </div>
 
 <h2>Setup</h2>
@@ -592,12 +585,12 @@ Aufgabe: History (H={cfg.seq_len} Schritte = {cfg.seq_len*0.2:.0f}&nbsp;s @ 5&nb
 &rarr; label bei t+{cfg.horizon} ({cfg.horizon*200}&nbsp;ms Vorhersagehorizont).<br>
 Features ({len(FEATURES)}): {", ".join(FEATURES)}.<br>
 Fraction={cfg.fraction} &middot; Stride={cfg.stride} &middot; Epochen={cfg.epochs}
-&middot; Batch={cfg.batch_size} &middot; Hidden={cfg.hidden} &middot; LR={cfg.lr}
+&middot; Batch={cfg.batch_size} &middot; Hidden MLP/LSTM/GRU=
+{cfg.mlp_hidden}/{cfg.lstm_hidden}/{cfg.gru_hidden} &middot; Adam LR={cfg.lr}
+&middot; Loss=MSE &middot; Dropout={cfg.dropout} &middot; L2={cfg.weight_decay}
 .<br>
-Train-Trips: {meta['n_train_trips']} &middot; Val-Trips: {meta['n_val_trips']}
-&middot; Test-Trips: {meta['n_test_trips']}<br>
-Train-Fenster: {meta['n_train_windows']:,} &middot; Val-Fenster: {meta['n_val_windows']:,}
-&middot; Test-Fenster: {meta['n_test_windows']:,}.
+Train-Trips: {meta['n_train_trips']} &middot; Val-Trips: {meta['n_val_trips']}<br>
+Train-Fenster: {meta['n_train_windows']:,} &middot; Val-Fenster: {meta['n_val_windows']:,}.
 </div>
 
 <h2>Ergebnis-Tabelle (Validierung)</h2>
@@ -608,19 +601,12 @@ Train-Fenster: {meta['n_train_windows']:,} &middot; Val-Fenster: {meta['n_val_wi
 {base_row_val}
 </table>
 
-<h2>Ergebnis-Tabelle (Test)</h2>
-<table>
-<tr><th>Modell</th><th>Params</th><th>Ranking-Score</th><th>R&sup2;</th><th>RMSE</th><th>MAE</th>
-<th>Richtungs-Acc (%)</th><th>Toleranz-Acc (%)</th><th>Trainingszeit</th></tr>
-{rows_test}
-{base_row_test}
-</table>
 <p class="note">Richtungs-Acc: 3-Klassen (bremsen/halten/beschl.) mit Deadband
 &plusmn;{DIR_DEADBAND}. Toleranz-Acc: Anteil |pred&minus;real| &le; {TOL}.
 Persistenz nutzt das letzte <i>wahre</i> Label a<sub>t</sub> als Vorhersage &ndash;
 Referenz, aber nicht direkt fair (das Modell sieht keine vergangenen Aktionen).</p>
-<p class="note">Ranking-Score: Rangsumme ueber R&sup2;, RMSE, MAE, Richtungs-Acc,
-Toleranz-Acc auf Val und Test; Test wird doppelt gewichtet. Niedriger ist besser.</p>
+<p class="note">Ranking-Score: Rangsumme ueber R&sup2;, RMSE, MAE, Richtungs-Acc
+und Toleranz-Acc auf der Validierung. Niedriger ist besser.</p>
 
 {img_block("Label real vs. Label predicted", "scatter",
     "Kernplot der Architekturauswahl: je enger an der Diagonalen, desto besser.")}
@@ -641,21 +627,23 @@ Toleranz-Acc auf Val und Test; Test wird doppelt gewichtet. Niedriger ist besser
 def parse_args() -> Config:
     p = argparse.ArgumentParser(description="MLP vs LSTM vs GRU fuer ATO-Stellsignal.")
     p.add_argument("--full", action="store_true", help="Alle Trips (Fraction=1.0).")
-    p.add_argument("--fraction", type=float, default=0.20)
+    p.add_argument("--fraction", type=float, default=0.5)
     p.add_argument("--epochs", type=int, default=10)
     p.add_argument("--seq-len", type=int, default=100)
     p.add_argument("--horizon", type=int, default=50)
     p.add_argument("--stride", type=int, default=5)
-    p.add_argument("--batch-size", type=int, default=256)
-    p.add_argument("--hidden", type=int, default=64)
-    p.add_argument("--lr", type=float, default=1e-3)
-    p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--batch-size", type=int, default=2048)
+    p.add_argument("--mlp-hidden", type=int, default=6)
+    p.add_argument("--lstm-hidden", type=int, default=54)
+    p.add_argument("--gru-hidden", type=int, default=63)
+    p.add_argument("--lr", type=float, default=1e-4)
+    p.add_argument("--dropout", type=float, default=0.45)
+    p.add_argument("--weight-decay", type=float, default=1e-4)
+    p.add_argument("--seed", type=int, default=2)
     p.add_argument("--max-train-trips", type=int, default=None)
     p.add_argument("--max-val-trips", type=int, default=None)
-    p.add_argument("--max-test-trips", type=int, default=None)
     p.add_argument("--max-train-windows", type=int, default=None)
     p.add_argument("--max-val-windows", type=int, default=None)
-    p.add_argument("--max-test-windows", type=int, default=None)
     a = p.parse_args()
     cfg = Config(
         seq_len=a.seq_len,
@@ -664,15 +652,17 @@ def parse_args() -> Config:
         fraction=1.0 if a.full else a.fraction,
         epochs=a.epochs,
         batch_size=a.batch_size,
-        hidden=a.hidden,
+        mlp_hidden=a.mlp_hidden,
+        lstm_hidden=a.lstm_hidden,
+        gru_hidden=a.gru_hidden,
         lr=a.lr,
+        dropout=a.dropout,
+        weight_decay=a.weight_decay,
         seed=a.seed,
         max_train_trips=a.max_train_trips,
         max_val_trips=a.max_val_trips,
-        max_test_trips=a.max_test_trips,
         max_train_windows=a.max_train_windows,
         max_val_windows=a.max_val_windows,
-        max_test_windows=a.max_test_windows,
     )
     return cfg
 
@@ -691,50 +681,36 @@ def main():
     print("\nLade Daten ...")
     train_df = load_split("train")
     val_df = load_split("val")
-    test_df = load_split("test")
 
     train_trips, train_labels = build_trip_arrays(train_df, cfg, "train", rng)
     val_trips, val_labels = build_trip_arrays(val_df, cfg, "val", rng)
-    test_trips, test_labels = build_trip_arrays(test_df, cfg, "test", rng)
-    print(
-        f"  Train-Trips: {len(train_trips)}  Val-Trips: {len(val_trips)}  "
-        f"Test-Trips: {len(test_trips)}"
-    )
+    print(f"  Train-Trips: {len(train_trips)}  Val-Trips: {len(val_trips)}")
 
     train_ds = SequenceDataset(train_trips, train_labels, cfg)
     val_ds = SequenceDataset(val_trips, val_labels, cfg)
-    test_ds = SequenceDataset(test_trips, test_labels, cfg)
     train_ds = cap_dataset(train_ds, cfg.max_train_windows, rng)
     val_ds = cap_dataset(val_ds, cfg.max_val_windows, rng)
-    test_ds = cap_dataset(test_ds, cfg.max_test_windows, rng)
-    print(
-        f"  Train-Fenster: {len(train_ds):,}  Val-Fenster: {len(val_ds):,}  "
-        f"Test-Fenster: {len(test_ds):,}"
-    )
+    print(f"  Train-Fenster: {len(train_ds):,}  Val-Fenster: {len(val_ds):,}")
 
-    if len(train_ds) == 0 or len(val_ds) == 0 or len(test_ds) == 0:
+    if len(train_ds) == 0 or len(val_ds) == 0:
         raise SystemExit("Keine Fenster gebaut - seq_len/horizon/stride pruefen.")
 
     train_loader = DataLoader(train_ds, batch_size=cfg.batch_size, shuffle=True,
                               num_workers=0, drop_last=False)
     val_loader = DataLoader(val_ds, batch_size=cfg.batch_size, shuffle=False,
                             num_workers=0, drop_last=False)
-    test_loader = DataLoader(test_ds, batch_size=cfg.batch_size, shuffle=False,
-                             num_workers=0, drop_last=False)
 
     meta_base = {
         "n_train_trips": len(train_trips),
         "n_val_trips": len(val_trips),
-        "n_test_trips": len(test_trips),
         "n_train_windows": len(train_ds),
         "n_val_windows": len(val_ds),
-        "n_test_windows": len(test_ds),
         "device": str(device),
     }
 
     results: list[RunResult] = []
     for name in ("MLP", "LSTM", "GRU"):
-        results.append(train_one(name, cfg, train_loader, val_loader, test_loader, device))
+        results.append(train_one(name, cfg, train_loader, val_loader, device))
         # Report/Metriken nach JEDEM Modell schreiben -> absturzsicher bei langen Laeufen.
         save_outputs(results, cfg, meta_base, t_start)
 
@@ -745,10 +721,8 @@ def save_outputs(results: list[RunResult], cfg: Config, meta_base: dict, t_start
     # y_true / y_prev sind fuer alle Modelle je Split identisch (Loader ohne Shuffle).
     y_true_ref = results[0].y_true
     y_prev_val_ref = results[0]._y_prev_val  # type: ignore[attr-defined]
-    y_true_test_ref = results[0]._y_true_test  # type: ignore[attr-defined]
-    y_prev_test_ref = results[0]._y_prev_test  # type: ignore[attr-defined]
     baseline_val = regression_metrics(y_true_ref, y_prev_val_ref)
-    baseline_test = regression_metrics(y_true_test_ref, y_prev_test_ref)
+    ranked, rank_score = rank_models(results)
 
     meta = {
         **meta_base,
@@ -757,7 +731,7 @@ def save_outputs(results: list[RunResult], cfg: Config, meta_base: dict, t_start
     }
 
     REPORTS_DIR.mkdir(exist_ok=True)
-    html = build_report(results, cfg, baseline_val, baseline_test, meta)
+    html = build_report(results, cfg, baseline_val, meta)
     report_path = REPORTS_DIR / "model_comparison_report.html"
     report_path.write_text(html, encoding="utf-8")
 
@@ -770,23 +744,13 @@ def save_outputs(results: list[RunResult], cfg: Config, meta_base: dict, t_start
                 "model": r.name,
                 "n_params": r.n_params,
                 "train_time_s": r.train_time_s,
+                "validation_rank_sum": rank_score[r.name],
                 **r.metrics,
             }
         )
-        rows.append(
-            {
-                "split": "test",
-                "model": r.name,
-                "n_params": r.n_params,
-                "train_time_s": r.train_time_s,
-                **r.test_metrics,
-            }
-        )
     rows.append(
-        {"split": "val", "model": "Persistence", "n_params": 0, "train_time_s": 0.0, **baseline_val}
-    )
-    rows.append(
-        {"split": "test", "model": "Persistence", "n_params": 0, "train_time_s": 0.0, **baseline_test}
+        {"split": "val", "model": "Persistence", "n_params": 0, "train_time_s": 0.0,
+         "validation_rank_sum": None, **baseline_val}
     )
     metrics_df = pd.DataFrame(rows)
     metrics_df.to_csv(REPORTS_DIR / "metrics.csv", index=False)
@@ -797,12 +761,10 @@ def save_outputs(results: list[RunResult], cfg: Config, meta_base: dict, t_start
     print("\n" + "=" * 60)
     print(f"ZWISCHENSTAND gespeichert (fertig: {done}):")
     print(metrics_df.to_string(index=False))
-    ranked, rank_score = rank_models_weighted(results, test_weight=2.0, val_weight=1.0)
     best = ranked[0]
     print(
         f"Aktuell bester -> {best.name} "
-        f"(Score={rank_score[best.name]:.1f}, "
-        f"Test R2={best.test_metrics['r2']:.4f}, Val R2={best.metrics['r2']:.4f})"
+        f"(Score={rank_score[best.name]:.1f}, Val R2={best.metrics['r2']:.4f})"
     )
     print(f"Report: {report_path}  |  Laufzeit bisher: {meta['total_time']:.1f}s")
 

@@ -1,0 +1,47 @@
+% Paket und Style fuer Code-Listings
+\usepackage{listings}
+\usepackage{color}
+\renewcommand{\lstlistingname}{Listing}
+
+\definecolor{codebg}{RGB}{245,245,245}
+\definecolor{codekeyword}{RGB}{0,0,150}
+\definecolor{codecomment}{RGB}{100,100,100}
+\definecolor{codestring}{RGB}{163,21,21}
+\definecolor{codetorch}{RGB}{170,60,0}
+
+% PyTorch/NumPy-Bezeichner, die im Quellcode der Kapitel als eigene
+% Keyword-Klasse (Klassen, Module, Tensor-Methoden) hervorgehoben werden
+\lstdefinestyle{bachelorarbeit}{
+    backgroundcolor=\color{codebg},
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{codekeyword}\bfseries,
+    keywordstyle=[2]\color{codetorch}\bfseries,
+    commentstyle=\color{codecomment}\itshape,
+    stringstyle=\color{codestring},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    numbersep=8pt,
+    frame=single,
+    breaklines=true,
+    breakatwhitespace=false,
+    showstringspaces=false,
+    tabsize=4,
+    captionpos=b,
+    morekeywords=[2]{
+        torch, nn, np,
+        DataLoader, Dataset, GRURegressor,
+        Adam, MSELoss,
+        cuda, is_available, manual_seed, seed,
+        no_grad, clip_grad_norm_, utils,
+        state_dict, load_state_dict, parameters,
+        zero_grad, backward, step, train, eval,
+        to, from_numpy, tensor, detach, cpu, clone,
+        float32
+    },
+    literate=
+        {ä}{{\"a}}1 {ö}{{\"o}}1 {ü}{{\"u}}1
+        {Ä}{{\"A}}1 {Ö}{{\"O}}1 {Ü}{{\"U}}1
+        {ß}{{\ss}}1,
+}
+
+\lstset{style=bachelorarbeit}

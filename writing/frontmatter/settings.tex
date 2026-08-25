@@ -3,16 +3,18 @@
 \usepackage[ngerman,english]{babel} % Sprache
 \usepackage{microtype}      % Schriftbild und den Zeilenumbruch verbessern
 \usepackage{graphicx}       % Grafiken
+\usepackage{rotating}       % Querformat-Abbildungen
 \usepackage{csquotes}       % Zitate
 \usepackage[style=ieee]{biblatex} % Literaturverzeichnis
 \usepackage{fancyhdr}       % Kopf- und Fußzeilen
 \usepackage[T1]{fontenc}    % Schriftart
 \usepackage{uarial}         % Arial
 \usepackage{parskip}        % Abstand zwischen Absätzen
-\usepackage[nopostdot,nonumberlist,acronym,automake,toc,section]{glossaries} % Abkürzungsverzeichnis
 \usepackage{titlesec}       % Section- und Subsection-Überschriften
 \usepackage[colorlinks=false,pdfborder={0 0 0}]{hyperref} % Hyperlink für Inhaltsverzeichnis und Quellen
 \usepackage{nameref}
+% glossaries muss nach hyperref geladen werden, damit Abkürzungen klickbare Links erhalten
+\usepackage[nopostdot,nonumberlist,acronym,automake,toc,section]{glossaries} % Abkürzungsverzeichnis
 \usepackage[nottoc,notbib,section]{tocbibind}
 \usepackage{url}            % bessere Darstellung von Links
 \usepackage{enumitem}       % Aufzählungen
@@ -20,12 +22,14 @@
 \usepackage{multirow}       % Tabellen mit mehreren Zeilen
 \usepackage{longtable}      % Für mehrseitige Tabellen
 \usepackage{makecell}       % Für Zellen in Tabellen
+\usepackage{tabularx}       % Tabellen mit flexibler Spaltenbreite
 \usepackage{lipsum}         % Dummy Text
 \usepackage{xcolor}
 \usepackage{xparse}
 \usepackage{amssymb}      % Mathematische Symbole wie \mathbb
 \usepackage{needspace}
 \usepackage{float}
+
 
 
 % Ränder einstellen

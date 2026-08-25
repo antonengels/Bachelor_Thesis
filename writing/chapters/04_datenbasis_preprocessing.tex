@@ -1,469 +1,310 @@
-\section{Datengrundlage}
+\section{Datenbasis und Preprocessing}
+\label{sec:daten_preprocessing}
 
-\subsection{Spezifikation der empirischen Datenbasis}
+Nachdem in Kapitel~\ref{sec:stand_der_technik} die theoretischen Grundlagen des \gls{BC} sowie die zentrale Forschungslücke herausgearbeitet wurden, widmet sich das vorliegende Kapitel der praktischen Umsetzung des ersten Teilziels dieser Arbeit: der Transformation unstrukturierter, historischer Betriebsdaten in eine für das maschinelle Lernen nutzbare Datenrepräsentation. Wie in Abschnitt~\ref{sec:problemstellung} dargelegt, liegen reale Sensordaten typischerweise verrauscht, fragmentiert und mit komplexen zeitlichen Abhängigkeiten vor, sodass eine sorgfältige Datenaufbereitung die notwendige Voraussetzung für ein belastbares Modelltraining bildet.
 
-Den Ausgangspunkt der empirischen Untersuchung bildet die rohe, unmodifizierte Datenbasis, welche in diesem Unterkapitel in ihrer ursprünglichen Form vorgestellt wird. 
-Methodisch stellt diese initiale Charakterisierung eine fundamentale Voraussetzung dar: 
-Ein neuronales Netz lernt die physikalischen Grenzen und Spezifika seiner Trainingsdaten -- die sogenannte \gls{ODD} -- blind auswendig. 
-Die exakte Definition der Datenherkunft ist folglich unabdingbar, um die späteren Generalisierungsgrenzen und potenziellen Schwächen des trainierten Modells fundiert einordnen zu können.
+Zunächst wird in Abschnitt~\ref{subsec:datengrundlage} die Herkunft und Struktur der zugrundeliegenden Datenbasis beschrieben, um ein grundlegendes Verständnis für die im weiteren Verlauf verwendeten Rohdaten zu schaffen. Darauf aufbauend erfolgt in Abschnitt~\ref{subsec:eda} eine \gls{EDA}, innerhalb derer sowohl die Datenqualität systematisch untersucht als auch das für diese Arbeit zentrale \gls{FE} und die anschließende Feature-Auswahl vorgenommen werden. Abschließend beschreibt Abschnitt~\ref{subsec:split} das methodische Vorgehen beim Trip-Level-Splitting, welches die Grundlage für eine valide Trennung von Trainings-, Validierungs- und Testdaten in den nachfolgenden Kapiteln bildet.
 
-Die zugrundeliegenden Betriebsdaten stammen von Siemens Vectron-Lokomotiven (siehe Abbildung \ref{fig:vectron}), welche im Erfassungszeitraum als Alleinfahrer, das heißt ohne angekuppelten Wagenzug, operierten. 
-Der für die Modellierung verwendete Arbeitsdatensatz umfasst ausschließlich verifizierte Fahrten auf der Betuweroute, einer dedizierten, flach trassierten Güterzugstrecke, wobei die Fahrten von einer Vielzahl unterschiedlicher Triebfahrzeugführer durchgeführt wurden. 
-Diese operativen Randbedingungen haben tiefgreifende Auswirkungen auf die Modellbildung: Die individuellen Fahrstile der menschlichen Fahrer in identischen Streckensituationen induzieren eine erhebliche stochastische Varianz, die für das Modell als Rauschen im Datensatz in Erscheinung tritt. 
-Darüber hinaus warnt das flache Streckenprofil bereits a priori vor einem signifikanten \textit{Covariate Shift}: Sollte das trainierte Modell später in der Inferenzphase auf bergigen Streckentopologien eingesetzt werden, trifft es zwangsläufig auf eine gänzlich unbekannte Zustandsverteilung.
+\subsection{Datengrundlage und Datenherkunft}
+\label{subsec:datengrundlage}
 
+Bevor die Daten im weiteren Verlauf dieses Kapitels aufbereitet und für das Training nutzbar gemacht werden, ist es notwendig, ihre Herkunft und ihre grundlegenden Eigenschaften zu verstehen. Ein neuronales Netz lernt ausschließlich innerhalb der Grenzen der ihm gezeigten Daten, weshalb ein klares Bild dieser Datenbasis unabdingbar ist, um spätere Ergebnisse und Modellgrenzen richtig einordnen zu können.
 
-\begin{figure}[htbp]
+Die verwendeten Betriebsdaten stammen von Siemens-Vectron-Lokomotiven (siehe \autoref{fig:vectron}), die im Erfassungszeitraum als sogenannte Alleinfahrer unterwegs waren, also ohne angehängte Wagen. Alle Fahrten fanden auf der Betuweroute statt, einer flachen und topologisch sehr gleichförmigen Güterverkehrsstrecke. Gesteuert wurden die Fahrten von einer Vielzahl unterschiedlicher Triebfahrzeugführer.
+
+\begin{figure}[h]
     \centering
-    \includegraphics[width=0.7\textwidth]{vectron.jpg}
-    \caption[Vectron-Lokomotive]{Abgebildet ist eine der beiden Siemens-Vectron-Lokomotiven, die für die Datenerhebung eingesetzt wurden \cite{vectron}.}
+    \includegraphics[width=0.8\textwidth]{vectron.jpg}
+    \caption[Siemens-Vectron-Lokomotive]{Abgebildet ist eine der beiden Siemens-Vectron-Lokomotiven, die für die Datenerhebung eingesetzt wurden \cite{vectron}.}
     \label{fig:vectron}
 \end{figure}
 
-Der erfasste Datensatz erstreckt sich über einen kontinuierlichen Aufzeichnungszeitraum von 84 Tagen (Daten aus 2026) und umfasst ein Speichervolumen von circa 50 Gigabyte im komprimierten \texttt{pcapng.gz}-Format. 
-Die Datenerfassung erfolgte über ein ethernet-basiertes Aufzeichnungssystem. 
-Auf Ebene der Quellsysteme beschreiben die folgenden Werte die Nenn-Abtastraten (Soll-Spezifikation) der jeweiligen Subsysteme im \gls{CCS}-Verbund (\gls{ETCS}, \gls{RST}, \gls{ATO}): 
-Aktorik-Signale mit 20\,Hz (50\,ms), kinematische Größen mit 5\,Hz (200\,ms) und statische Streckendaten mit bis zu 1\,Hz (1000\,ms). 
-Diese Angaben charakterisieren die diskrete Sensor- beziehungsweise Telegrammaktualisierung auf Subsystemebene und sind von der später beobachteten Empfangsstatistik des aggregierten \gls{ORD}-Datenstroms strikt zu trennen. 
+Diese Rahmenbedingungen sind für die spätere Modellierung von großer Bedeutung. Da viele verschiedene Fahrer dieselben Streckenabschnitte auf ihre eigene, individuelle Weise befahren haben, entsteht im Datensatz eine natürliche Streuung im Fahrverhalten, die sich für das Modell wie Rauschen bemerkbar macht. Zudem ist zu beachten, dass die Strecke durchgehend flach ist: Ein Modell, das ausschließlich auf diesen Daten trainiert wird, hat folglich nie gelernt, wie mit Steigungen oder Gefällen umzugehen ist. Käme ein solches Modell später auf einer bergigen Strecke zum Einsatz, würde es auf für sich völlig neue Situationen treffen.
 
-Durch die formale Strukturierung lassen sich die extrahierten Roh-Variablen kategorisieren und den Dimensionen des Zustands- und Aktionsraums zuweisen. 
-Die Fahrzeugkinematik wird durch die Ist-Geschwindigkeit (\texttt{V\_EST}) und die Beschleunigung (\texttt{A\_EST}) abgebildet. Die restriktiven Streckenlimits werden über die zulässige Höchstgeschwindigkeit \texttt{V\_PERMITTED} (\gls{ETCS}-OB Paket 6) repräsentiert. 
-Das Signal \texttt{A\_EST} liegt dabei im Rohdatenstrom als herstellerspezifisch skaliertes Festkomma-Signal in \(\mathrm{mm/s^2}\) vor, wobei \(1\,\text{Unit}=0{,}001\,\mathrm{m/s^2}\) gilt (\(1000\,\text{Units}=1{,}0\,\mathrm{m/s^2}\)). 
-Die im Datensatz beobachteten Wertebereiche von ungefähr \([-1000,+700]\) entsprechen damit physikalisch plausiblen Verzögerungen bis etwa \(-1{,}0\,\mathrm{m/s^2}\) (Betriebsbremsung) sowie Anfahrbeschleunigungen bis etwa \(+0{,}7\,\mathrm{m/s^2}\) auf der Betuweroute. 
-Im späteren Preprocessing werden diese Rohwerte mittels Z-Score-Standardisierung \(z=(x-\mu)/\sigma\) in einen zentrierten, dimensionslosen Zustandsraum für PyTorch überführt.
-Aus protokolltechnischer Sicht des \gls{ATO}-over-\gls{ETCS}-Standards (insbesondere Paket 4/103) gehören dazu ferner Topologie- und Kontextfelder wie der Streckengradient (\texttt{A\_GRADIENT}) und die Schienenhaftung (\texttt{Q\_ADHESION}) sowie fahrzeuginterne Rückmeldungen (\texttt{M\_RST\_TBsetVal}). 
-Die anschließende Sichtung des vorliegenden \gls{ORD}-Rohdatenextrakts zeigte jedoch, dass \texttt{Q\_ADHESION} in der verfügbaren Aufzeichnungsstufe nicht belegt war und somit als systematisch fehlendes Signal zu behandeln ist. 
-Methodisch wird \texttt{Q\_ADHESION} daher als standardseitig relevantes, im konkreten Datensatz jedoch nicht beobachtbares Feld klassifiziert und folgerichtig nicht in den tatsächlich modellierten Feature-Vektor aufgenommen. 
-Dem gegenüber steht die Zielvariable \texttt{M\_ATO\_RTBRq} -- die vom menschlichen Fahrer geforderte Hebelstellung. Diese wird ausdrücklich als das Label $Y$ definiert, welches es zu prädizieren gilt. 
-Durch diese präzise Zuweisung von Input-Features $X$ und Label $Y$ wird das unstrukturierte, reale Zug-Szenario mathematisch formalisiert und in ein klassisches Regressionsproblem des Supervised Learning ($X \rightarrow Y$) übersetzt.
+Die Daten wurden über einen Zeitraum von mehreren Wochen mit einem fahrzeugseitigen Aufzeichnungssystem erfasst und liegen als große Sammlung roher, unstrukturierter Sensor- und Telegrammdaten vor. Aus diesem Rohdatenstrom lassen sich die für diese Arbeit relevanten Größen extrahieren: Dazu zählen unter anderem die aktuelle Geschwindigkeit und Beschleunigung des Zuges, die auf dem jeweiligen Streckenabschnitt zulässige Höchstgeschwindigkeit sowie der Streckengradient. Als Zielgröße, welche das Modell erlernen soll, dient die vom Triebfahrzeugführer tatsächlich angeforderte Hebelstellung. Damit lässt sich die ursprünglich unstrukturierte Zugfahrt in ein klassisches Eingabe-Ausgabe-Problem des \gls{SL} überführen: Aus dem aktuellen Fahrzustand soll die zugehörige menschliche Aktion vorhergesagt werden.
 
-Trotz dieser methodischen Fundierung weist der Datensatz a priori signifikante physikalische Limitationen auf, die offen adressiert werden müssen. 
-Es liegt ausschließlich die Dynamik einer leeren Lokomotive vor; die immense Trägheit und die komplexe Wagendynamik eines schweren Güterzuges sind in diesen Daten nicht abgebildet. 
-Ferner enthält der Datensatz fundamentale \textit{Hidden Variables} (unsichtbare Ereignisse) -- wie beispielsweise den direkten Sichtkontakt des Triebfahrzeugführers zu vorausliegenden Signalen oder Hindernissen, welche nicht im System protokolliert werden. 
-Damit ist das zentrale Risiko der \textit{Causal Confusion} (Ursachenverwechslung) im Imitation Learning gegeben: Das Modell beobachtet Expertenreaktionen, deren kausaler Auslöser nicht im Zustandsvektor $X$ enthalten ist, und kann die Aktion folglich nur über sichtbare, aber ursächlich unvollständige Korrelate approximieren. 
-Formal entsteht eine Fehlzuordnung zwischen unbeobachteter Ursache und beobachtbarer Wirkung, wodurch das Netzwerk Scheinkorrelationen erlernt und die zugrundeliegende Fahrdynamik nur verzerrt internalisiert. 
-Dieser Umstand erzeugt ein systematisches, nicht auflösbares Label-Rauschen, welches die Generalisierungsfähigkeit der Policy begrenzt und die Robustheit gegenüber ungesehenen Situationen signifikant reduziert.
+Bereits an dieser Stelle lassen sich zwei wesentliche Einschränkungen der Datenbasis festhalten. Erstens bildet der Datensatz ausschließlich das Fahrverhalten einer leeren, ungekoppelten Lokomotive ab. Die zusätzliche Masse und Trägheit eines vollständigen, beladenen Güterzuges ist somit nicht Teil der Daten. Zweitens erfasst das System nicht alle Informationen, die dem menschlichen Fahrer tatsächlich zur Verfügung stehen. Insbesondere Sichtkontakt zu Signalen oder Hindernissen wird nicht protokolliert. Reagiert ein Fahrer also auf etwas, das er sieht, aber das System nicht aufzeichnet, entsteht für das Modell eine Handlung, deren eigentlicher Auslöser unsichtbar bleibt. Dieses Phänomen wird in der Literatur als Causal Confusion bezeichnet und stellt eine Form von Rauschen dar, die sich durch keine noch so sorgfältige Datenaufbereitung vollständig beseitigen lässt.
 
-\subsection{Explorative Datenanalyse und Bereinigung}
+\subsection{Exploratory Data Analysis}
+\label{subsec:eda}
 
-Bevor die historischen Rohdaten in formale Tensordarstellungen für das Training des neuronalen Netzes überführt werden können, ist eine systematische \gls{EDA} mit Datenbereinigung methodisch unumgänglich. 
-Künstliche neuronale Netze agieren fundamental als hochdimensionale, aber blinde Mustererkenner, die jegliche in den Eingangsdaten vorhandenen Korrelationen ungefiltert auf die Zielvariablen abbilden. 
-Dies unterstreicht das fundamentale Paradigma des maschinellen Lernens „Garbage In, Garbage Out“, wonach fehlerhafte, verrauschte oder unvollständige Eingangsdaten in der Konsequenz zu dysfunktionalen und nicht generalisierbaren Prädiktionsmodellen führen.
+Aufbauend auf der in Abschnitt~\ref{subsec:datengrundlage} beschriebenen Datenherkunft wird im Folgenden eine explorative Analyse (\gls{EDA}) der aufbereiteten Trip-Daten durchgeführt. Die Analyse basiert auf 1{.}388 einzelnen Fahrten (Trips) aus 78 Aufzeichnungssitzungen zweier Vectron-Lokomotiven, was einem Gesamtumfang von rund 3{,}2 Millionen Zeitschritten bei einem Zeitraster von 200\,ms entspricht -- umgerechnet etwa 178 Stunden reiner Fahrzeit.
 
-In diesem Kontext fungiert die \gls{EDA} als zentrales Diagnosewerkzeug. 
-Sie dient dazu, systematisches Rauschen, Ausreißer und Anomalien in den realen Betriebsdaten frühzeitig zu identifizieren und durch geeignete Vorverarbeitungsschritte zu filtern. 
-Durch diesen strengen Aufbereitungsprozess wird sichergestellt, dass das Modell im späteren Verlauf ausschließlich valide physikalische Kausalitäten der Zugsteuerung abstrahiert und nicht fälschlicherweise temporäre Sensorfehler oder Dateninkonsistenzen als gültige Fahrstrategie erlernt.
+Ziel dieses Unterkapitels ist es, systematische Muster, Datenlücken und Auffälligkeiten in den Daten frühzeitig zu erkennen. Darauf aufbauend werden im weiteren Verlauf der Zustands- und Aktionsraum für das Modelltraining formal festgelegt.
+\subsubsection{Datenqualität und Auffälligkeiten}
+\label{subsubsec:datenqualitaet}
 
-\subsubsection{Data Cleaning und zeitliche Synchronisierung}
+Ein erster wichtiger Schritt der Datenqualitätsprüfung betrifft den Umgang mit sogenannten Sentinel-Werten. Damit sind reservierte Platzhalterwerte gemeint (u.\,a. 32767 bzw. 65535), mit denen die Quellsysteme ein fehlendes Signal kennzeichnen -- etwa wenn ein Telegramm auf Protokollebene nicht empfangen wurde. Solche Werte werden also nicht als echte Null gespeichert, sondern über einen speziellen Zahlencode markiert. Vor der weiteren Analyse wurden alle Sentinel-Werte erkannt, maskiert und als fehlend behandelt. Andernfalls würden sie als scheinbar plausible, tatsächlich aber bedeutungslose Extremwerte in das Modell einfließen.
 
-Im ersten Schritt der Datenbereinigung müssen systemspezifische Fehlercodes, sogenannte Sentinels, sowie ungültige Messungen adressiert werden. 
-Dem vorgelagert wurde ein strikter Topologie-Filter angewandt: Alle Fahrten, die nicht zweifelsfrei der Betuweroute zugeordnet werden konnten (z.\,B. Rangierfahrten, Zubringerabschnitte oder Trips mit unvollständigen \gls{GPS}-/Topologie-Logs), wurden konsequent ausgeschlossen. 
-Diese Selektion ist methodisch notwendig, um eine konsistente Strecken- und Gradientenbasis (\texttt{A\_GRADIENT}) sicherzustellen und Störrauschen aus heterogenen Infrastrukturen im Zustandsraum zu vermeiden. 
-Der finale Arbeitsdatensatz umfasst damit 403 Trips und besteht zu 100\,\% aus verifizierten Betuweroute-Fahrten; dies bildet die systematische Grundlage für das spätere trip-basierte Splitting. 
-Das Aufzeichnungssystem protokolliert Sensorausfälle durch fest definierte Extremwerte, wie beispielsweise $65535$ bei Geschwindigkeitssignalen (\texttt{V\_EST}, \texttt{V\_PERMITTED}) und $\pm 32768$ beziehungsweise $32767$ bei Beschleunigungs- und Gradientendaten (\texttt{A\_EST}, \texttt{A\_GRADIENT}). 
-Diese artifiziellen Konstanten wurden konsequent durch \gls{NaN} ersetzt. 
-Ergänzend erfolgte eine Out-of-Range-Maskierung, um physikalisch unmögliche Werte zu filtern. 
-So wurden glitchbedingte Geschwindigkeitsspitzen von bis zu 371\,km/h eliminiert, wodurch sich ein realistisches Maximum von 141\,km/h bei einem 99,9-Perzentil von 125\,km/h einstellte. 
-Nach dieser Bereinigung ergaben sich unterschiedliche Nutzbarkeitsquoten: 
-Während zentrale Signale und Labels (\texttt{V\_EST}, \texttt{M\_ATO\_RTBRq}, \texttt{M\_RST\_TBsetVal}, \texttt{M\_RST\_SlipSlide}) eine lückenlose Verfügbarkeit von 100\,\% aufwiesen, fiel diese bei \texttt{V\_PERMITTED}, \texttt{A\_EST} und \texttt{A\_GRADIENT} durch einen 11,49\,\%igen Sentinel-Ausfall auf 88,5\,\%. 
-Stark ausgedünnt zeigten sich die Features \texttt{D\_STPDISTANCE} (38,2\,\% Nutzbarkeit aufgrund von 61,8\,\% fehlenden Werten) und \texttt{TOPO\_Q\_RADIUS} (35,1\,\%), was deren uneingeschränkte Nutzung limitiert.
+Die anschließende Prüfung der neun Kernsignale zeigt ein sehr uneinheitliches Bild hinsichtlich ihrer Vollständigkeit. Die Geschwindigkeit \texttt{V\_EST}, die beiden Rückmeldegrößen \texttt{M\_RST\_TBsetVal} und \texttt{M\_RST\_SlipSlide} sowie das Label \texttt{M\_ATO\_RTBRq} liegen durchgehend zu 100\,\% vor. Dagegen fehlen bei \texttt{V\_PERMITTED}, \texttt{A\_EST} und \texttt{A\_GRADIENT} jeweils rund 11{,}2\,\% der Werte. Dieser gemeinsame Fehlwertanteil ist plausibel: Alle drei Größen stammen aus denselben \gls{ETCS}-Telegrammen -- periodischen Funkmeldungen, über die die Streckenausrüstung dem Zug u.\,a. die zulässige Geschwindigkeit und den Streckengradienten übermittelt. Wird ein solches Telegramm nicht empfangen, fehlen entsprechend alle daraus abgeleiteten Signale gleichzeitig. Deutlich kritischer ist die Distanz zum nächsten Halt, \texttt{D\_STPDISTANCE}: Mit einem Fehlwertanteil von knapp 65\,\% steht dieses Feature nur für gut ein Drittel aller Zeitschritte zur Verfügung, da ein Haltepunkt nur innerhalb eines begrenzten Vorausschauhorizonts im Streckenprofil überhaupt bekannt ist -- also erst, wenn der Zug schon nah genug an ihn herangefahren ist. Noch extremer betroffen ist die topologische Kurvenradius-Information \texttt{TOPO\_Q\_RADIUS}: Mit über 83\,\% Fehlwerten liegt sie nur für einen kleinen Bruchteil der Zeitschritte vor und ist entsprechend zurückhaltend zu bewerten.
 
-Methodisch begründet sich die Maskierung dieser Sentinels unmittelbar aus den Anforderungen stabiler Modelloptimierung. 
-Unmaskierte Extremwerte würden nachfolgende Skalierungsverfahren, wie die Min-Max- oder Z-Score-Normalisierung, vollständig dominieren, wodurch die reale Signalvarianz auf annähernd null gestaucht würde. 
-Werden derart verzerrte Werte in das neuronale Netz gespeist, erzeugen sie extreme Aktivierungen im Forward-Pass. 
-Dies führt deterministisch zu verschwindenden oder explodierenden Gradienten (Vanishing/Exploding Gradients) und verhindert eine stabile Konvergenz des Modells während des Trainings.
+Neben der reinen Verfügbarkeit liefert auch die Form der Häufigkeitsverteilung der Rohsignale wichtige Hinweise auf die Fahrdynamik. \autoref{fig:distribution_a_est} zeigt die Häufigkeitsverteilung der geschätzten Beschleunigung \texttt{A\_EST} über den gesamten Datensatz hinweg. Auf der x-Achse ist die Beschleunigung in mm/s$^2$ aufgetragen, auf der y-Achse die absolute Häufigkeit im Datensatz. Das Histogramm zeigt eine sehr scharfe, schmale Spitze bei einem Wert nahe null, an die sich nach beiden Seiten deutlich flachere Ausläufer anschließen. Dabei erstreckt sich der linke, negative Bereich (Bremsen) über einen größeren Wertebereich als der rechte, positive Bereich (Beschleunigen). Innerhalb der Ausläufer sind feine, treppenartige Stufen erkennbar, und an beiden Rändern der Verteilung -- bei etwa $-1250$ sowie $+750\,\text{mm/s}^2$ -- tritt jeweils ein einzelner, vom übrigen Verlauf klar abgesetzter Balken auf.
 
-Neben der Wertebereinigung erforderte die asynchrone und uneinheitliche Aufzeichnungsfrequenz der Rohdaten eine zeitliche Synchronisierung. 
-Das ursprüngliche Median-Abtastintervall betrug circa 34\,ms, wies jedoch eine starke Spanne von 8 bis 118\,ms auf. 
-Dies entspricht einer effektiven Ereignisdichte von etwa 28 bis 30\,Hz im aggregierten Datenstrom des On-board Recording Devices (\gls{ORD}), nicht jedoch einer physikalischen Abtastrate einzelner Sensoren. 
-Die Diskrepanz zwischen Soll-Nennfrequenzen der Quellsysteme und beobachteter Ist-Dichte entsteht durch asynchrone Telegrammankünfte, Bus-Overhead, Jitter, Paketierung und das Übertragungsverhalten des ethernet-basierten \gls{CCS} Consist Networks. 
-Um aus diesem asynchronen Ist-Datenstrom einen für PyTorch konsistenten, synchronen State Space zu erzeugen, wurden die Signalgruppen mittels Zeit-Binning, Outer-Join und anschließendem Resampling mit Forward-Fill auf ein konstantes Zeitraster überführt (modellabhängig 200\,ms/5\,Hz beziehungsweise 100\,ms/10\,Hz). 
-Die durch diese Diskretisierung verbleibenden Datenlücken erwiesen sich als minimal: 
-Der Median der größten Lücke pro Fahrt (Trip) lag bei lediglich 173\,ms. Lücken von über 2\,s existierten mit durchschnittlich 0,05 Vorkommnissen pro Trip praktisch nicht. 
-Zur Sicherstellung der zeitlichen Kohärenz wurden Trips bei Unterbrechungen von mehr als 60\,s systematisch in separate Teilsequenzen getrennt.
+Diese Form lässt sich fahrdynamisch gut erklären. Die scharfe Spitze bei null entspricht der überwiegenden Zeit, in der das Fahrzeug annähernd mit konstanter Geschwindigkeit fährt. Dass sich der Bremsbereich über einen größeren Wertebereich erstreckt als der Beschleunigungsbereich, deutet darauf hin, dass Bremsvorgänge tendenziell dynamischer bzw. mit größerer Bandbreite ausgeführt werden als Anfahrvorgänge. Die treppenartigen Stufen lassen auf eine diskrete Quantisierung des Rohsignals schließen, während die beiden isolierten Randbalken vermutlich den technisch vorgegebenen Extremwerten für eine Betriebsbremsung bzw. die maximale Anfahrbeschleunigung entsprechen.
 
-Die Reduktion der zeitlichen Auflösung (Downsampling) von 30\,Hz auf 5\,Hz lässt sich physikalisch und signaltheoretisch begründen. 
-Die steuerungsrelevante Fahrdynamik einer Vectron-Lokomotive wird durch Aktorik- und Trägheitszeitkonstanten im Bereich von etwa $1{,}0\,\text{s}$ bis $2{,}0\,\text{s}$ (Bremsdruckaufbau/Ansprechverhalten) sowie kinematische Reaktionszeiten bis ungefähr $3{,}0\,\text{s}$ geprägt. 
-Daraus folgt eine dominante Dynamik mit Grenzfrequenzen deutlich unterhalb von $1\,\text{Hz}$; hochfrequente Anteile oberhalb von etwa $5\,\text{Hz}$ (unter 200\,ms) sind im vorliegenden \gls{ORD}-Strom daher überwiegend auf Sensor-Jitter, Paketierung und Bus-Overhead zurückzuführen, nicht auf reale Fahr- oder Bremszustandsänderungen. 
-Mit einer Abtastrate von $f_s=5\,\text{Hz}$ wird die Nyquist-Bedingung für die relevante Systemdynamik ($f_{max}\approx0{,}5\text{ bis }1{,}0\,\text{Hz}$, also $f_s \gg 2f_{max}$) klar erfüllt, sodass die fahrdynamisch relevanten Signalverläufe aliasing-frei und ohne informationskritischen Verlust repräsentiert werden. 
-Durch das Downsampling wird die Rechenlast drastisch reduziert und die extrem hohe Autokorrelation benachbarter Frames minimiert, wodurch redundante Informationen aus dem Datensatz entfernt werden. 
-Dies führt zu kompakteren Sequenzlängen, was insbesondere das \gls{BPTT}-Verfahren beim Training rekurrenter neuronaler Netze über lange zeitliche Horizonte signifikant stabilisiert.
-
-\subsubsection{Analyse der Klassenverteilung}
-
-Eine detaillierte Untersuchung der Werteverteilungen von Eingangsfeatures und Zielvariablen ist von zentraler Bedeutung, um potenzielle Verzerrungen (Bias) im Modelltraining zu antizipieren. 
-Abbildung \ref{fig:a_est_dist} illustriert exemplarisch die Verteilung des bereinigten Beschleunigungssignals \texttt{A\_EST} über den gesamten Datensatz. 
-Auf der Abszisse sind die physikalischen Schätzwerte aufgetragen, während die Ordinate die absolute Häufigkeit der Vorkommnisse auf einer logarithmischen Skala darstellt. 
-Die Verteilung zeigt eine deutliche Konzentration um den Nullpunkt, was die physikalische Realität der Trägheit und langer Phasen konstanter Geschwindigkeit im Schienenverkehr widerspiegelt.
-
-\begin{figure}[htbp]
+\begin{figure}[h]
     \centering
-    \includegraphics[width=0.8\textwidth]{02_distributions.png}
-    \caption[Verteilung von A\_EST]{Verteilung des Features \texttt{A\_EST} nach der Bereinigung. Die x-Achse zeigt die Signalwerte, die y-Achse die absolute Häufigkeit im Datensatz (logarithmische Skalierung).}
-    \label{fig:a_est_dist}
+    \includegraphics[width=\textwidth]{02_distributions.png}
+    \caption[Verteilung der Beschleunigung \texttt{A\_EST}]{Häufigkeitsverteilung der geschätzten Beschleunigung \texttt{A\_EST} über den gesamten Datensatz (alle Splits) hinweg. Die scharfe Spitze bei null entspricht Fahrphasen mit annähernd konstanter Geschwindigkeit; die asymmetrischen Ausläufer nach links (Bremsen) und rechts (Beschleunigen) sowie die isolierten Randbalken bei etwa $-1250$ und $+750\,\text{mm/s}^2$ deuten auf die technischen Extremwerte von Betriebsbremse und maximaler Anfahrbeschleunigung hin.}
+    \label{fig:distribution_a_est}
 \end{figure}
 
-Analog zur Analyse der Eingangsfeatures wurde die Zielvariable, die Hebelstellung \texttt{M\_ATO\_RTBRq}, eingehend untersucht. 
-Wie im linken Teildiagramm von Abbildung \ref{fig:label_dist} dargestellt, lässt sich das Fahrverhalten hinsichtlich der Aktionsrichtung in drei grundlegende Klassen unterteilen. 
-Beschleunigungsphasen (Werte $> 0$) machen mit 49,2\,\% knapp die Hälfte der Daten aus. 
-Bremsvorgänge (Werte $< 0$) repräsentieren 27,8\,\% der Aufzeichnungen. 
-Die verbleibenden 23,0\,\% entfallen auf die exakte Neutralstellung beziehungsweise das Rollen des Zuges (Werte $= 0$). 
-Das rechte Teildiagramm verdeutlicht ergänzend die Werteskalierung der aktiven Aktionen: 
-Es zeigt sich, dass sich auch die tatsächlichen Hebelbewegungen stark um kleine Beträge nahe der Neutrallage konzentrieren und extreme Auslenkungen eher selten vorkommen.
+Um die aggregierten Kennzahlen um eine anschauliche Perspektive zu ergänzen, zeigt \autoref{fig:sample_trip} den zeitlichen Verlauf einer einzelnen, repräsentativen Beispielfahrt (\texttt{trip822}, Dauer rund 23{,}7 Minuten) in drei übereinander angeordneten Teilplots mit gemeinsamer Zeitachse.
 
-\begin{figure}[htbp]
+Der obere Teilplot zeigt die gefahrene Geschwindigkeit \texttt{V\_EST}. Sie steigt mehrfach steil auf ein Plateau von rund 120\,km/h an, wird dort über längere Streckenabschnitte nahezu konstant gehalten und sinkt dazwischen mehrfach ab, streckenweise bis auf wenige zehn km/h, bevor sie am Ende der Fahrt vollständig auf null zurückgeht. Dieses Muster ist typisch für die Betuweroute, eine stark befahrene Güterverkehrsstrecke zwischen den Niederlanden und Deutschland, auf der lange Abschnitte mit hoher zulässiger Geschwindigkeit von kurzen Verlangsamungs- und Halteereignissen unterbrochen werden.
+
+Der mittlere Teilplot zeigt die geschätzte Beschleunigung \texttt{A\_EST}. Über weite Strecken liegt sie nahe null, wird jedoch wiederholt von kurzen, deutlichen Ausschlägen unterbrochen -- positiv bis knapp 750\,mm/s$^2$ während der Anfahrphasen, negativ bis knapp $-1000$\,mm/s$^2$ während stärkerer Bremsungen. Diese Ausschläge fallen zeitlich mit den auf- bzw. absteigenden Flanken der Geschwindigkeit im oberen Teilplot zusammen.
+
+Der untere Teilplot stellt schließlich das Label \texttt{M\_ATO\_RTBRq} dar, also die vom Fahrer angeforderte Hebelstellung im Bereich $[-1,1]$. Deutlich erkennbar sind große, klar abgegrenzte Ausschläge während der aktiven Brems- und Beschleunigungsphasen, etwa das Plateau bei rund $0{,}7$ während der ersten Anfahrt. Auffällig ist jedoch zusätzlich eine Vielzahl kleinerer, kurzzeitiger Ausschläge, die auch während vermeintlich stabiler Fahrphasen auftreten. Dieses unruhige Verhalten bestätigt empirisch das in Abschnitt~\ref{subsec:mlp} bereits theoretisch hergeleitete \emph{Chattering-Phänomen}: Gemeint ist damit, dass die angeforderte Hebelstellung ohne Berücksichtigung eines zeitlichen Kontexts von Zeitschritt zu Zeitschritt schnell und unruhig hin- und herspringt, obwohl die zugrundeliegende fahrdynamische Absicht deutlich ruhiger ist. Dies untermauert empirisch die Notwendigkeit sequenzfähiger Architekturen, die einen zeitlichen Kontext mit einbeziehen.
+
+\begin{sidewaysfigure}
     \centering
-    \includegraphics[width=1\textwidth]{07_label_analysis.png}
-    \caption[Verteilung der Zielvariable]{Analyse der Zielvariable \texttt{M\_ATO\_RTBRq}. Links: Prozentuale Verteilung der diskreten Hebelzustände (Bremsen, Neutral, Beschleunigen). Rechts: Histogramm der kontinuierlichen Label-Werte (exklusive exakter Nullwerte), welches die starke Konzentration um kleine Beträge aufzeigt.}
-    \label{fig:label_dist}
-\end{figure}
-
-Für das Training des neuronalen Netzes birgt diese ausgeprägte Nullwert-Dominanz der Zielvariable ein erhebliches Risiko für den Optimierungsprozess. 
-Der Anteil von 23\,\% exakt nullwertigen Labels in Kombination mit den dicht angrenzenden, kleinen Hebelstellungen impliziert eine starke Massenkonzentration bei $y=0$ (Beharrungs- beziehungsweise Rollphasen). 
-Begrifflich wird dieses Muster in Anlehnung an die Zähldatenstatistik häufig als „Zero-Inflation“ bezeichnet; im vorliegenden kontinuierlichen Setting ist dies jedoch als bewusste Analogie zu verstehen. 
-Statistisch liegt hier eine Mischstruktur aus einer Punktmasse bei $0$ (Dirac-artiger Anteil) und einer kontinuierlichen Dichte auf den Intervallen $[-1,0)$ sowie $(0,1]$ vor. 
-Ohne geeignete Gegenmaßnahmen tendiert das Modell dadurch zu einer Regression-zum-Mittel in Richtung $0$, da eine nahezu konstante Null-Prädiktion unter Standard-\gls{MSE} einen künstlich günstigen Gesamtloss erzeugen kann, ohne die kausale Fahrdynamik belastbar zu erlernen.
-
-Um eine rein statische Roll-Strategie zu vermeiden, muss diese Asymmetrie in der Trainingsphase explizit adressiert werden. 
-Dazu zählen robuste Verlustfunktionen (z.\,B. Huber-Loss statt reinem \gls{MSE}), eine aktionsphasensensitive Evaluierung sowie balancierende Sampling-Strategien, um die Repräsentativität dynamischer Beschleunigungs- und Bremsentscheidungen im Datensatz gezielt zu erhöhen.
-
-\subsubsection{Korrelationsanalyse}
-
-Um die statistischen Abhängigkeiten innerhalb des bereinigten Datensatzes zu quantifizieren und die Vorhersagekraft der einzelnen Sensordaten zu evaluieren, wurde eine Korrelationsanalyse durchgeführt. 
-Die physikalischen Gesetzmäßigkeiten der Zugsteuerung -- beispielsweise das Verhältnis zwischen Bremskraft, Geschwindigkeit und Anhalteweg -- sind von ausgeprägten Sättigungseffekten und Nichtlinearitäten geprägt. 
-Aus diesem Grund wurde für die Untersuchung der rangbasierte Spearman-Korrelationskoeffizient ($\rho$) gewählt. 
-Im Gegensatz zur klassischen Pearson-Korrelation, welche ausschließlich lineare Zusammenhänge misst und nicht-lineare Effekte systematisch unterschätzen würde, erfasst die Spearman-Korrelation jegliche monotonen Beziehungen robust und verteilungsunabhängig. 
-Die resultierende Korrelationsmatrix ist in Abbildung \ref{fig:spearman_corr} als Heatmap visualisiert.
-
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=1\textwidth]{05_spearman.png}
-    \caption[Spearman-Korrelationsmatrix]{Spearman-Korrelationsmatrix der Sensorwerte und der Zielvariable. Die Heatmap visualisiert die monotonen, nicht-linearen Abhängigkeiten zwischen den Features (Multikollinearität) sowie deren individuelle Vorhersagekraft für die Hebelstellung \texttt{M\_ATO\_RTBRq} (Feature Importance).}
-    \label{fig:spearman_corr}
-\end{figure}
-
-Die Analyse der sogenannten Feature Importance, also der direkten Korrelation der Eingangsmerkmale mit der Zielvariable \texttt{M\_ATO\_RTBRq}, liefert zentrale Erkenntnisse für die Modellbildung. 
-Den stärksten Zusammenhang weist das Signal \texttt{M\_RST\_TBsetVal} mit $\rho = 0{,}78$ auf. 
-Da es sich hierbei jedoch um die fahrzeugseitige Rückmeldung der real gestellten Kraft handelt, repräsentiert dieser Wert eine reaktive Größe, die extrem nah am prädiktiven Ziel selbst liegt. 
-\label{sec:leakage_mrst}
-Die Verwendung dieses Features birgt ein hohes Risiko für Label-Leakage (das Modell erhält unbeabsichtigt die Lösung) und erfordert daher im weiteren Modellierungsverlauf höchste Vorsicht. 
-Valide und signifikante prädiktive Zusammenhänge zeigen hingegen die geschätzte Beschleunigung \texttt{A\_EST} ($\rho = 0{,}56$), die Ist-Geschwindigkeit \texttt{V\_EST} ($\rho = 0{,}39$) sowie der Halteabstand \texttt{D\_STPDISTANCE} ($\rho = 0{,}38$), obgleich letzterer durch die zuvor beschriebene geringe Datenabdeckung von lediglich 38\,\% limitiert ist. 
-Nur schwach korrelieren die zulässige Höchstgeschwindigkeit \texttt{V\_PERMITTED} ($\rho = 0{,}14$) und der Streckengradient \texttt{A\_GRADIENT} ($\rho = 0{,}09$). 
-Die Variablen \texttt{M\_RST\_SlipSlide} ($\rho = -0{,}02$) und \texttt{TOPO\_Q\_RADIUS} ($\rho = 0{,}02$) erweisen sich hinsichtlich einer direkten monotonen Abhängigkeit als irrelevant für die Zielprädiktion.
-
-Neben der Feature Importance offenbart die Matrix signifikante Interkorrelationen zwischen den unabhängigen Variablen, was auf eine ausgeprägte Multikollinearität hindeutet. 
-Besonders hervorzuheben sind hierbei die starken Zusammenhänge zwischen \texttt{A\_EST} und \texttt{M\_RST\_TBsetVal} ($\rho = 0{,}68$) sowie innerhalb der kinematischen Metriken: \texttt{V\_EST} korreliert stark mit \texttt{V\_PERMITTED} ($\rho = 0{,}63$) und \texttt{D\_STPDISTANCE} ($\rho = 0{,}53$), während \texttt{V\_PERMITTED} und \texttt{D\_STPDISTANCE} ebenfalls eine deutliche Abhängigkeit aufweisen ($\rho = 0{,}46$).
-
-Unter Aspekten der Modell-Generalisierung ist diese Multikollinearität äußerst kritisch zu bewerten. 
-Redundante, hochkorrelierte Variablen blähen den Merkmalsraum unnötig auf und begünstigen den Fluch der Dimensionalität (Curse of Dimensionality). 
-Sie liefern dem neuronalen Netz keine zusätzliche Informationstiefe, sondern verstärken stattdessen das zugrundeliegende Datenrauschen und erhöhen das Risiko für Overfitting massiv. 
-Zudem erschweren sie die Attributionsstabilität des Modells, da der Optimierungsalgorithmus beim Gradientenabstieg willkürlich die Gewichte zwischen den redundanten Features verschieben kann, ohne den Fehler (Loss) zu verändern. 
-Folglich bilden diese stark korrelierenden Sensordaten primäre Kandidaten für eine systematische Entfernung oder Aggregation im anstehenden \gls{FE}.
-
-\subsubsection{Physikalischer Plausibilitätscheck}
-
-Um die funktionale Integrität des bereinigten Datensatzes abschließend zu verifizieren, wurde eine übergeordnete Plausibilitätsprüfung (Sanity-Check) anhand aggregierter Kennzahlen durchgeführt. 
-Der Abgleich der geschätzten Sensor-Beschleunigung \texttt{A\_EST} mit der numerischen Ableitung der Geschwindigkeit nach der Zeit ($\frac{dV}{dt}$) ergab eine hohe Spearman-Korrelation von $\rho = 0{,}81$ bei einem Skalierungsfaktor von etwa $6$, was die physikalische Konsistenz der Sensorik bestätigt. 
-Der Faktor lässt sich technisch durch die kombinierte Einheiten- und Filtersystematik erklären: Während \texttt{A\_EST} \gls{SI}-basiert in \(\mathrm{mm/s^2}\) skaliert übertragen wird, liegt der Differenzenquotient aus \texttt{V\_EST} in \((\mathrm{km/h})/\mathrm{s}\) vor; allein die Umrechnung \(1\,\mathrm{m/s^2}=3{,}6\,(\mathrm{km/h})/\mathrm{s}\) erzeugt bereits einen systematischen Maßstabsversatz. 
-Die darüber hinausgehende Abweichung resultiert aus der sensorseitigen Tiefpassfilterung und Glättung im Bordrechner, wodurch \texttt{A\_EST} gegenüber der roh differenzierten Geschwindigkeit amplituden- und phasenmodifiziert erscheint. 
-Zudem stimmte das Vorzeichen der Hebelstellung in 78\,\% der Fälle mit der resultierenden Beschleunigungsrichtung überein. 
-Auch die grundlegende Fahrlogik, wonach die Ist-Geschwindigkeit die zulässige Höchstgeschwindigkeit nicht überschreiten sollte (\texttt{V\_EST} $\le$ \texttt{V\_PERMITTED}), war in 90,7\,\% der Datenpunkte erfüllt. 
-Physisch unmögliche Zustände wie negative Geschwindigkeiten (0\,\%) oder Werte über 150\,km/h traten nach der Bereinigung nicht mehr auf.
-
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[angle=90,height=0.9\textheight]{11_sample_trip.png}
-    \caption[Zeitreihe einer Beispiel-Fahrt]{Zeitreihen-Analyse einer beispielhaften Fahrt. Die Darstellung überlagert die physikalischen Zustandsgrößen (Geschwindigkeit und Beschleunigung) mit den korrespondierenden Expertenaktionen (Hebelstellung) über die Zeit und verdeutlicht das physikalisch plausible Brems- und Beschleunigungsverhalten.}
+    \includegraphics[width=0.9\textwidth]{11_sample_trip.png}
+    \caption[Zeitreihe einer Beispielfahrt \texttt{trip822}]{Zeitlicher Verlauf der Beispielfahrt \texttt{trip822} (Dauer rund 23{,}7 Minuten): Geschwindigkeit \texttt{V\_EST} (oben), geschätzte Beschleunigung \texttt{A\_EST} (Mitte) sowie das Label \texttt{M\_ATO\_RTBRq}, also die angeforderte Hebelstellung (unten).}
     \label{fig:sample_trip}
+\end{sidewaysfigure}
+
+\subsubsection{Feature Engineering}
+\label{subsubsec:feature_engineering}
+
+Wie in Abschnitt~\ref{subsec:datengrundlage} dargelegt, bildet ein einzelner Zeitschritt die fahrdynamisch relevante Vorgeschichte nur unvollständig ab. Um dem Modell dennoch aussagekräftige und physikalisch nachvollziehbare Signale zur Verfügung zu stellen, wurden aus den Rohdaten zusätzliche, sogenannte \emph{engineerte Features} abgeleitet. Sie lassen sich in drei Kategorien einteilen: zeitlich geglättete bzw. abgeleitete Größen, normierte Verhältnisgrößen sowie eine physikalisch motivierte Interaktionsgröße.
+
+Zur formalen Definition dieser Features werden zunächst die verwendeten Symbole eingeführt. Für einen Zeitschritt $t$ bezeichnen $v(t)$ die gefahrene Geschwindigkeit (\texttt{V\_EST}), $v_{\text{perm}}(t)$ die zulässige Höchstgeschwindigkeit (\texttt{V\_PERMITTED}), $a(t)$ die geschätzte Beschleunigung (\texttt{A\_EST}), $d(t)$ die Distanz zum nächsten Halt (\texttt{D\_STPDISTANCE}) und $\gamma(t)$ den Streckengradienten (\texttt{A\_GRADIENT}). Das Zeitraster beträgt $\Delta t = 0{,}2\,\text{s}$ (entsprechend den 200\,ms aus Abschnitt~\ref{subsec:datengrundlage}).
+
+\medskip
+\noindent\textbf{\texttt{a\_num}} Dieses Feature approximiert die Beschleunigung rein kinematisch als zeitliche Ableitung der Geschwindigkeit, unabhängig vom sensorisch geschätzten Signal \texttt{A\_EST}. Es wird über den Differenzenquotienten zwischen zwei aufeinanderfolgenden Zeitschritten berechnet:
+\begin{equation}
+    a_{\text{num}}(t) = \frac{v(t) - v(t - \Delta t)}{\Delta t}
+    \label{eq:a_num}
+\end{equation}
+Dabei ist $v(t)$ die aktuelle und $v(t-\Delta t)$ die Geschwindigkeit im vorherigen Zeitschritt. \texttt{a\_num} dient damit als von \texttt{A\_EST} unabhängige Referenzgröße für die tatsächliche Beschleunigung.
+
+\medskip
+\noindent\textbf{\texttt{a\_est\_roll\_mean\_2s}} Dieses Feature glättet das Rohsignal \texttt{A\_EST} über ein gleitendes Fenster von $N=10$ Zeitschritten, was bei einem Zeitraster von 200\,ms rund zwei Sekunden entspricht:
+\begin{equation}
+    \bar{a}_{2s}(t) = \frac{1}{N}\sum_{i=0}^{N-1} a(t - i\,\Delta t), \qquad N = \frac{2\,\text{s}}{\Delta t} = 10
+    \label{eq:a_roll_mean}
+\end{equation}
+Durch die Mittelung über die letzten zehn Beschleunigungswerte wird kurzfristiges Sensorrauschen unterdrückt und die zugrundeliegende Beschleunigungstendenz hervorgehoben.
+
+\medskip
+\noindent\textbf{\texttt{v\_roll\_std\_2s}} Analog dazu quantifiziert dieses Feature die kurzfristige Geschwindigkeitsschwankung als gleitende Standardabweichung von \texttt{V\_EST} über dasselbe Zwei-Sekunden-Fenster:
+\begin{equation}
+    \sigma_{v,2s}(t) = \sqrt{\frac{1}{N}\sum_{i=0}^{N-1}\bigl(v(t-i\,\Delta t) - \bar{v}_{2s}(t)\bigr)^2}
+    \label{eq:v_roll_std}
+\end{equation}
+mit $N=10$ wie zuvor und $\bar{v}_{2s}(t)$ als dem gleitenden Mittelwert von $v$ über dasselbe Fenster, analog zu Gleichung~\eqref{eq:a_roll_mean}. Ein hoher Wert von \texttt{v\_roll\_std\_2s} zeigt an, dass die Geschwindigkeit innerhalb der letzten zwei Sekunden stark geschwankt hat.
+
+\medskip
+\noindent\textbf{\texttt{jerk}} Dieses Feature misst, wie schnell sich die Beschleunigung selbst ändert, und erfasst damit besonders abrupte Fahrmanöver. Es ist definiert als zeitliche Änderungsrate von \texttt{a\_num}:
+\begin{equation}
+    j(t) = \frac{a_{\text{num}}(t) - a_{\text{num}}(t-\Delta t)}{\Delta t}
+    \label{eq:jerk}
+\end{equation}
+Große Werte von $j(t)$ treten also genau dann auf, wenn sich die Beschleunigung innerhalb kurzer Zeit stark ändert, etwa bei einem plötzlichen Bremseinsatz.
+
+\medskip
+\noindent\textbf{\texttt{v\_headroom}} Dieses Feature beschreibt die verbleibende Geschwindigkeitsreserve bis zur zulässigen Höchstgeschwindigkeit, als Differenz zwischen zulässiger und gefahrener Geschwindigkeit:
+\begin{equation}
+    v_{\text{head}}(t) = v_{\text{perm}}(t) - v(t)
+    \label{eq:v_headroom}
+\end{equation}
+Ein Wert nahe null bedeutet, dass die aktuelle Geschwindigkeit bereits nahe an der zulässigen Grenze liegt; ein hoher Wert zeigt entsprechend viel Spielraum nach oben an.
+
+\medskip
+\noindent\textbf{\texttt{v\_ratio}} Dieses Feature normiert die Geschwindigkeitsausnutzung unabhängig vom jeweils gültigen Streckenlimit als Verhältnis von gefahrener zu zulässiger Geschwindigkeit:
+\begin{equation}
+    v_{\text{ratio}}(t) = \frac{v(t)}{v_{\text{perm}}(t)} \in [0,1]
+    \label{eq:v_ratio}
+\end{equation}
+Ein Wert nahe eins bedeutet, dass das Fahrzeug nahe an der zulässigen Höchstgeschwindigkeit fährt, unabhängig davon, wie hoch diese absolut ist.
+
+\medskip
+\noindent\textbf{\texttt{stop\_proximity}} Dieses Feature wandelt die potenziell unbeschränkte Distanz zum nächsten Halt in eine gut skalierbare Größe um, die im Nahbereich eines Haltepunkts stark ansteigt:
+\begin{equation}
+    s_{\text{prox}}(t) = \frac{1}{|d(t)| + 1}
+    \label{eq:stop_proximity}
+\end{equation}
+Durch die Kehrwertbildung nähert sich $s_{\text{prox}}(t)$ bei sehr großer Entfernung dem Wert null an, während sie kurz vor dem Haltepunkt (also für $d(t)\to 0$) stark gegen eins ansteigt. Die Addition von eins im Nenner verhindert dabei eine Division durch null.
+
+\medskip
+\noindent\textbf{\texttt{grad\_x\_v}} Dieses Feature approximiert den geschwindigkeitsabhängigen Einfluss der Streckenneigung auf den benötigten Fahrwiderstand als Interaktionsterm zwischen Streckengradient und Geschwindigkeit:
+\begin{equation}
+    g_v(t) = \gamma(t) \cdot v(t)
+    \label{eq:grad_x_v}
+\end{equation}
+Da der zur Überwindung einer Steigung benötigte Kraftanteil näherungsweise proportional zur gefahrenen Geschwindigkeit ist, macht dieser Interaktionsterm dem Modell einen Zusammenhang explizit zugänglich, den es aus $\gamma(t)$ und $v(t)$ einzeln nur schwer rekonstruieren könnte.
+
+\medskip
+Insgesamt erweitern diese acht abgeleiteten Größen den reinen Rohdaten-Zustandsvektor um Informationen, die dem Modell kausal-physikalische Zusammenhänge explizit zugänglich machen -- anstatt dass es diese erst implizit aus den rohen Momentanwerten rekonstruieren müsste.
+
+\subsubsection{Feature Auswahl}
+\label{subsubsec:feature_auswahl}
+
+Zur Bewertung der Relevanz der einzelnen Features sowie zur Aufdeckung von Redundanzen wurde zunächst eine Spearman-Korrelationsanalyse über alle Roh-Features und das Label durchgeführt. Der Spearman-Koeffizient $\rho$ misst, wie stark zwei Größen monoton zusammenhängen -- also nicht notwendigerweise linear, aber gleichsinnig zu- oder abnehmend. Er liegt im Bereich $[-1,1]$, wobei $0$ keinen und $\pm 1$ einen perfekten monotonen Zusammenhang bedeutet.
+
+\autoref{fig:spearman} zeigt die resultierende Korrelationsmatrix als Heatmap. Jede Zelle enthält den paarweisen Korrelationskoeffizienten zwischen dem jeweiligen Zeilen- und Spaltensignal, farblich codiert von blau (negativ) über weiß (keine Korrelation) bis dunkelrot (stark positiv); die Diagonale zeigt erwartungsgemäß durchgehend den Wert $1{,}00$.
+
+Mit Blick auf die Rohsignale untereinander fällt zunächst die Korrelation zwischen \texttt{V\_EST} und \texttt{V\_PERMITTED} auf ($\rho = 0{,}66$): Sie ist plausibel, da die gefahrene Geschwindigkeit naturgemäß durch die zulässige Geschwindigkeit begrenzt wird. Bezogen auf das Label \texttt{M\_ATO\_RTBRq} zeigt sich die mit Abstand stärkste Korrelation zur Rückmeldegröße \texttt{M\_RST\_TBsetVal} ($\rho = 0{,}76$). Diese hohe Korrelation ist allerdings mit Vorsicht zu interpretieren. \texttt{M\_RST\_TBsetVal} bildet die vom Fahrzeug tatsächlich umgesetzte Zug- bzw. Bremskraft ab. Damit handelt es sich im Kern um ein zeitversetztes Abbild des Labels selbst und nicht um eine davon unabhängige Eingangsgröße. Würde dieses Signal direkt als Zustands-Input verwendet, hätte das Modell die gesuchte Zielgröße nahezu unmittelbar zur Verfügung. Das widerspräche dem eigentlichen Ziel der Arbeit, nämlich eine Fahrstrategie aus tatsächlich unabhängigen Zustandsmerkmalen zu erlernen. \texttt{M\_RST\_TBsetVal} wird deshalb trotz seiner hohen statistischen Korrelation nicht in den primären Feature-Vektor aufgenommen.
+
+Auch die geschätzte Beschleunigung \texttt{A\_EST} ($\rho = 0{,}51$), die Distanz zum nächsten Halt \texttt{D\_STPDISTANCE} ($\rho = 0{,}34$) sowie die Geschwindigkeit \texttt{V\_EST} ($\rho = 0{,}33$) weisen einen deutlichen Zusammenhang zum Label auf. Der Streckengradient \texttt{A\_GRADIENT} ($\rho = 0{,}11$), die zulässige Geschwindigkeit \texttt{V\_PERMITTED} ($\rho = 0{,}10$) sowie insbesondere der Schleuder-/Gleitschutz-Indikator \texttt{M\_RST\_SlipSlide} ($\rho = -0{,}03$, ein Indikator dafür, ob die Rad-Schiene-Schlupfüberwachung eingegriffen hat) und der Kurvenradius \texttt{TOPO\_Q\_RADIUS} ($\rho = 0{,}02$) zeigen dagegen nur eine schwache bis vernachlässigbare Korrelation zum Label.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\textwidth]{05_spearman.png}
+    \caption[Spearman-Korrelationsmatrix der Rohsignale]{Spearman-Korrelationsmatrix der neun Rohsignale sowie des Labels \texttt{M\_ATO\_RTBRq} auf Trip-Ebene. Farbe und Zahlenwert je Zelle geben den paarweisen Korrelationskoeffizienten $\rho \in [-1,1]$ zwischen dem jeweiligen Zeilen- und Spaltensignal an.}
+    \label{fig:spearman}
 \end{figure}
 
-Ergänzend zu den aggregierten Metriken bestätigt die visuelle Analyse einer exemplarischen Fahrt (siehe Abbildung \ref{fig:sample_trip}) die Kausalität des Fahrerverhaltens im Streckenkontext. 
-Es zeigt sich deutlich, dass Bremsphasen (Label $< 0$) systematisch mit einer sinkenden Geschwindigkeit sowie einem abnehmenden Halteabstand (\texttt{D\_STPDISTANCE}) zusammenfallen. 
-Das Beschleunigungsverhalten ist gleichermaßen nachvollziehbar, da der Zugkraftaufbau primär dann initiiert wird, wenn eine ausreichende Geschwindigkeitsreserve (Differenz zwischen \texttt{V\_PERMITTED} und \texttt{V\_EST}) vorhanden ist.
+Eine rein lineare bzw. monotone Korrelationsbetrachtung kann nichtlineare Zusammenhänge jedoch systematisch unterschätzen. Deshalb wurden die acht engineerten Features zusätzlich anhand zweier weiterer Maße bewertet: der Transinformation (\gls{MI}), die auch nichtlineare Abhängigkeiten zwischen zwei Größen erfasst, sowie dem Betrag des standardisierten Koeffizienten aus einer multivariaten Regression, der den Beitrag eines Features unter Kontrolle aller übrigen Features angibt. Zusammen mit dem Betrag der Spearman-Korrelation ergeben sich damit drei komplementäre Sichten auf dieselben Features.
 
-Trotz dieser offensichtlichen physikalischen Plausibilität offenbart die Analyse signifikante Lücken im Merkmalsraum. 
-Wesentliche physikalische und umweltbedingte Einflussgrößen (Hidden Variables) sind im Datensatz nicht repräsentiert. 
-Dazu zählen fundamentale fahrzeugspezifische Konstanten wie die aktuelle Zugmasse beziehungsweise Beladung, die Zuglänge sowie die exakte Bremskraft-Charakteristik des eingesetzten Fahrzeugtyps. 
-Auch Umwelteinflüsse wie Nässe, Laub, Temperatur oder Wind, welche die Adhäsion massiv beeinflussen, fehlen als direktes Messsignal; insbesondere ist das im Standardkontext vorgesehene Feld \texttt{Q\_ADHESION} im vorliegenden \gls{ORD}-Extrakt nicht belegt. 
-Darüber hinaus fehlt der übergeordnete betriebliche Kontext, wie etwa Zeitdruck durch den Fahrplan, vorausschauende Signalbilder aus der \gls{LZB}, die über das aktuelle \texttt{V\_PERMITTED} hinausgehen, oder der spezifische Grund eines Halts.
+\autoref{fig:engineered_importance} stellt diese drei Maße für jedes der acht engineerten Features als horizontales Balkendiagramm mit je drei Balken gegenüber. Bei \texttt{a\_est\_roll\_mean\_2s} und \texttt{a\_num} sind alle drei Balken durchweg lang. Bei anderen Features fallen die drei Maße hingegen deutlich auseinander -- etwa bei \texttt{jerk}, dessen Spearman-Balken nahezu bei null liegt, oder bei \texttt{v\_headroom} und \texttt{v\_ratio}, deren MI-Balken jeweils die längsten im gesamten Diagramm sind.
 
-Aus algorithmischer Sicht impliziert dieser Befund, dass das Imitationslernproblem nicht als vollständig beobachtbarer Markov-Entscheidungsprozess (\gls{MDP}), sondern als partiell beobachtbarer Prozess (\gls{POMDP}) aufzufassen ist: Der reale Systemzustand enthält latente Größen, die im Beobachtungsvektor nicht enthalten sind. 
-Analoge Effekte der in Abschnitt 4.1 eingeführten \textit{Causal Confusion} zeigen sich hier bei der Adhäsionsdynamik: Wenn ein Triebfahrzeugführer aufgrund nasser Schienen frühzeitig bremst, entsprechende Reibwert- beziehungsweise Wettersignale aber fehlen, wird das Netz gezwungen, dieses Manöver beobachtbaren, jedoch ursächlich unbeteiligten Merkmalen zuzuschreiben. 
-Methodisch muss die fehlende Reibwertinformation daher implizit über beobachtbare Proxys erschlossen werden, insbesondere über die dynamische Abweichung zwischen Soll- und Ist-Beschleunigung (\texttt{A\_EST}) in Kombination mit dem Radschlupf-Signal \texttt{M\_RST\_SlipSlide}. 
-Ein konsistentes Lernziel besteht folglich darin, potenzielle Adhäsionsverluste nicht als direktes Eingangssignal zu erwarten, sondern als latenten Zustand aus diesen messbaren Fehlanpassungen zu inferieren.
-
-\subsection{Feature Engineering}
-
-Nach der initialen Bereinigung und Analyse der historischen Rohdaten bildet das domänenspezifische \gls{FE} den nächsten methodischen Schritt. 
-Rohe Sensordaten allein bilden die zugrundeliegenden physikalischen Kausalitäten der Zugsteuerung oft nicht in einer Form ab, die von einem maschinellen Lernmodell effizient extrahiert werden kann. 
-Um dem neuronalen Netz die komplexe Fahrentscheidung zu erleichtern und das Risiko von Kausalitätsfehlern zu minimieren, müssen die Eingangsdaten gezielt durch physikalisch motivierte, abgeleitete Merkmale ergänzt werden. 
-Dieser Prozess transformiert implizites Systemwissen in explizite numerische Features, wodurch das Modell befähigt wird, vorausschauende statt rein reaktive Fahrstrategien zu erlernen.
-
-\subsubsection{Methodik und Evaluierung}
-
-Ein zentraler Aspekt bei der Konstruktion und Auswahl potenzieller Eingangsmerkmale ist die strikte Prävention von sogenanntem Label-Leakage. 
-Wie die vorangegangene Korrelationsanalyse offenbarte, weist das rohe Feature \texttt{M\_RST\_TBsetVal} -- die fahrzeugseitige Rückmeldung der tatsächlich gestellten Kraft -- mit $\rho = 0{,}78$ die stärkste Spearman-Korrelation zur Zielvariable auf. 
-Die detaillierte methodische Begründung für den Ausschluss dieses Signals wurde bereits in Abschnitt \ref{sec:leakage_mrst} hergeleitet; \texttt{M\_RST\_TBsetVal} wird daher im weiteren Verlauf konsequent nicht als Modelleingang verwendet.
-
-Um eine konsistente zeitliche Basis für das Feature Engineering zu gewährleisten, erfolgt die Berechnung aller abgeleiteten Merkmale iterativ pro Fahrt (Trip) auf dem etablierten 200-ms-Raster. 
-Für zeitliche Glättungen und Ableitungen werden dabei gleitende Fenster (Rolling Windows) von zehn Samples genutzt, was einem physikalischen Zeitraum von etwa zwei Sekunden entspricht.
-
-Zur systematischen und objektiven Bewertung der Relevanz neu generierter Features wird eine Tri-Metrik-Evaluation angewendet. 
-Da ein einzelnes statistisches Maß die komplexen Zusammenhänge in hochdimensionalen und multikollinearen Daten oft nur unzureichend oder verzerrt abbildet, werden drei komplementäre Evaluationsmetriken herangezogen:
-
-Methodisch ist dabei eine klare Rollentrennung entscheidend: Die vier Roh-Sensorgrößen \texttt{V\_EST}, \texttt{V\_PERMITTED}, \texttt{A\_EST} und \texttt{A\_GRADIENT} definieren als \(S_{\text{base}} \in \mathbb{R}^4\) den physikalischen Minimal-Zustandsraum des Systems und werden domänengetrieben (nicht datengetrieben) gesetzt. 
-Die Tri-Metrik-Evaluation dient ausschließlich der Selektion zusätzlicher, synthetisch konstruierter Kandidaten, um Informationsgewinn gegen Redundanz und Rauschanfälligkeit abzuwägen und den Zustandsraum nicht unnötig zu erweitern.
-
-Insbesondere ist \texttt{A\_GRADIENT} trotz schwacher univariater Korrelation ($\rho = 0{,}09$) nicht verzichtbar. 
-Der Streckengradient beschreibt mit \(F_{\text{st}} = m \cdot g \cdot \sin(\alpha)\) eine exogene Hangabtriebskraft und damit eine zur Kinematik orthogonale Erhaltungsgröße im Fahrwiderstands- und Leistungsmodell. 
-Ohne diese Topologieinformation kann das Netz nicht kausal unterscheiden, ob ein Bremsmanöver durch Gefälle oder durch andere operative Randbedingungen induziert wurde; die Folge wären systematische Fehlattributionen in nichtlinearen Brems- und Zugkraftsituationen.
-
-\begin{itemize}
-    \item \textbf{Absoluter Spearman-Koeffizient ($|\rho|$):} Diese Metrik misst robuste, monotone -- und damit auch nicht-lineare -- Zusammenhänge zwischen dem jeweiligen potenziellen Feature und der Zielvariable.
-    \item \textbf{\acrlongshort{MI}:} Dieses informationstheoretische Maß erfasst jegliche Form von Abhängigkeiten, einschließlich rein nicht-linearer und nicht-monotoner Informationsgehalte, die durch klassische Korrelationskoeffizienten nicht abgebildet werden.
-    \item \textbf{Absoluter standardisierter \gls{OLS}-Koeffizient ($|\beta|$):} Mittels einer gewöhnlichen Fehlerquadratmethode (Ordinary Least Squares, \gls{OLS}) wird der tatsächliche multivariate Beitrag eines Features bewertet, wobei die Effekte bestehender Multikollinearität systematisch herausgerechnet werden.
-\end{itemize}
-
-Um Verzerrungen durch eine Einzelmetrik zu vermeiden, wird ergänzend ein aggregierter Gesamtindex als Composite Rank $R_{\text{composite}}$ gebildet. 
-Die Berechnung erfolgt als arithmetisches Mittel der drei Einzelränge aus Spearman, \gls{MI} und \gls{OLS}:
-
-\begin{equation}
-    R_{\text{composite}} = \frac{R_{\text{Spearman}} + R_{\text{MI}} + R_{\text{OLS}}}{3}
-\end{equation}
-
-Da über drei diskrete Rangplätze gemittelt wird, entstehen systematisch gebrochene Rangwerte (z.\,B. $R_{\text{composite}} = 4{,}7$). 
-Diese Dezimalränge bilden die relative Gesamtbedeutung eines Features im multidimensionalen Leistungsvergleich präziser ab als eine eindimensionale Ganzzahlordnung.
-
-Durch die Kombination dieser drei Betrachtungswinkel lässt sich die Prädiktionsgüte jedes konstruierten Merkmals ganzheitlich quantifizieren, bevor es in den finalen Feature-Vektor des neuronalen Netzes aufgenommen wird.
-
-\subsubsection{Kinematische Features}
-
-Die erste Kategorie des \gls{FE} fokussiert sich auf die Bewegungsdynamik des Schienenfahrzeugs. 
-Ziel ist es, aus den teils stark verrauschten rohen Geschwindigkeits- und Beschleunigungsdaten verlässliche Prädiktoren zu extrahieren, welche die tatsächliche Kinematik für das neuronale Netz optimal abbilden. 
-
-Das aussagekräftigste Merkmal dieser Kategorie -- und gleichzeitig der Gesamtsieger der Evaluation (Rang 1) -- ist die zeitlich geglättete Beschleunigung \texttt{a\_est\_roll\_mean\_2s}. 
-Sie berechnet sich als der gleitende Mittelwert (Simple Moving Average) des rohen Beschleunigungssignals über ein Fenster von zwei Sekunden ($n = 10$ Zeitschritte im 200-ms-Raster):
-
-\begin{equation}
-    a_{\text{est\_roll\_mean\_2s}, t} = \frac{1}{n} \sum_{i=0}^{n-1} a_{\text{est}, t-i} \quad \text{mit} \quad n=10
-\end{equation}
-
-Signaltheoretisch wirkt diese Operation wie ein maßgeblicher Tiefpassfilter. 
-Das sprunghafte und von Sensorrauschen geprägte Originalsignal \texttt{A\_EST} wird entrauscht, wodurch der zugrundeliegende physikalische Trend maschinell verdaubar wird. 
-Dies spiegelt sich in den hervorragenden Evaluationsmetriken wider: Das Feature erreicht einen Spearman-Koeffizienten von $0{,}52$ und die höchste \gls{MI} von $0{,}26$.
-
-Als ergänzendes Feature wurde die numerische Ableitung der Ist-Geschwindigkeit nach der Zeit, \texttt{a\_num} ($\frac{dV}{dt}$), berechnet (Rang 3). 
-Die Berechnung über das diskrete Zeitintervall $\Delta t = 0{,}2\,\text{s}$ lautet:
-
-\begin{equation}
-    a_{\text{num}, t} = \frac{v_{\text{est}, t} - v_{\text{est}, t-1}}{\Delta t}
-\end{equation}
-
-Obwohl dieses Merkmal eine starke monotone Beziehung zur Zielgröße aufweist (Spearman $0{,}43$), zeigt die ML-Bewertung Schwächen im multivariaten Kontext. 
-Numerische Ableitungen realer Sensordaten sind prinzipbedingt ausreißerbehaftet. 
-Zudem sinkt der standardisierte \gls{OLS}-Koeffizient auf $|\beta| = 0{,}15$, da \texttt{a\_num} stark kollinear (redundant) zur bereits vorhandenen Sensor-Beschleunigung \texttt{A\_EST} ist und dem Modell somit nur begrenzten multivariaten Mehrwert liefert.
-
-Ein Paradebeispiel für die Notwendigkeit der Tri-Metrik-Evaluation liefert das Feature \texttt{v\_roll\_std\_2s} (Rang 6). 
-Es beschreibt die gleitende Standardabweichung der Geschwindigkeit über ein Zwei-Sekunden-Fenster und quantifiziert die lokale Volatilität der Fahrt:
-
-\begin{equation}
-    v_{\text{roll\_std\_2s}, t} = \sqrt{\frac{1}{n-1} \sum_{i=0}^{n-1} \left( v_{\text{est}, t-i} - \bar{v}_{\text{est}, (t, n)} \right)^2} \quad \text{mit} \quad n=10
-\end{equation}
-
-Die lineare und monotone Korrelation dieses Features mit der Zielvariable ist praktisch null (Spearman $\approx 0$). 
-Die \gls{MI} erreicht jedoch einen signifikanten Wert von $0{,}15$. 
-Dieses Merkmal fungiert für das Modell als ein rein nicht-linearer Indikator für volatile Phasen, beispielsweise an den kritischen Übergängen zwischen Brems- und Beschleunigungsvorgängen, was von klassischen Korrelationsmetriken völlig unbemerkt bliebe.
-
-Als am wenigsten geeignet (Rang 6,3) erwies sich hingegen der Ruck (\texttt{jerk}), welcher die zeitliche Änderungsrate der Beschleunigung darstellt:
-
-\begin{equation}
-    jerk_t = \frac{a_{\text{num}, t} - a_{\text{num}, t-1}}{\Delta t}
-\end{equation}
-
-Die physikalische und mathematische Natur dieses Features verdeutlicht eine fundamentale Grenze beim Feature Engineering mit realen Betriebsdaten. 
-Als zweite numerische Ableitung des ohnehin leicht verrauschten Geschwindigkeitssignals degeneriert das Signal-Rausch-Verhältnis vollständig. Das resultierende Feature besteht fast ausschließlich aus hochfrequentem Rauschen, bietet dem neuronalen Netz keinerlei stabilen prädiktiven Mehrwert und verschlechtert potenziell die Robustheit der Policy.
-
-\subsubsection{Kontext- und Regelabweichungs-Features}
-
-Neben der reinen Bewegungsdynamik erfordert eine vorausschauende Fahrstrategie die situative Einordnung des Schienenfahrzeugs im betrieblichen Umfeld. 
-Die nachfolgenden Merkmale quantifizieren die fortlaufende Regelabweichung, indem sie den aktuellen physikalischen Fahrzustand in Relation zu den deterministischen Streckenvorgaben -- insbesondere zu Geschwindigkeitsbegrenzungen und Haltepunkten -- setzen. 
-Das neuronale Netz muss „wissen“, wie nah sich der Zug an seinen operationellen Limits und Zielen befindet.
-
-Das effektivste Merkmal dieser Kategorie und das zweitbeste Feature der Gesamtauswertung (Rang 2) ist die relative Ausnutzung des zulässigen Geschwindigkeitslimits, definiert als \texttt{v\_ratio}:
-
-\begin{equation}
-    v_{\text{ratio}, t} = \frac{v_{\text{est}, t}}{v_{\text{permitted}, t}}
-\end{equation}
-
-Für die Modellierung erweist sich dieser Quotient als das mit Abstand beste Kontext-Feature. 
-Durch die mathematische Normierung ist die Größe intrinsisch skaliert und gegenüber absoluten Geschwindigkeitsschwankungen äußerst robust. 
-Dieser Informationsgehalt schlägt sich in einem extrem hohen multivariaten Beitrag nieder, welcher durch einen standardisierten \gls{OLS}-Koeffizienten von $|\beta| = 0{,}21$ quantifiziert wird. 
-Das Modell lernt aus dieser Größe unmittelbar, wie viel Spielraum bis zum zwingenden Bremseingriff der Zugbeeinflussungssysteme verbleibt.
-
-Ergänzend zur relativen Metrik wurde die absolute Geschwindigkeitsreserve \texttt{v\_headroom} berechnet (Rang 4,7):
-
-\begin{equation}
-    v_{\text{headroom}, t} = v_{\text{permitted}, t} - v_{\text{est}, t}
-\end{equation}
-
-Die Evaluation dieses Features veranschaulicht eindrucksvoll die Problematik der Multikollinearität im Feature Engineering. 
-Univariat betrachtet ist das Merkmal äußerst aussagekräftig, was durch einen hohen \gls{MI}-Wert von $0{,}29$ belegt wird. 
-Im multivariaten Kontext des Modells fällt die Relevanz jedoch signifikant ab ($|\beta| = 0{,}08$). 
-Die Ursache hierfür liegt in der massiven Redundanz zu \texttt{v\_ratio} und den zugrundeliegenden rohen Geschwindigkeitssignalen. 
-Das Merkmal bläht den Merkmalsraum auf, ohne dem Netz unabhängige, neue Informationen zu liefern.
-
-Zur Modellierung des zielgenauen Bremsverhaltens vor Bahnhöfen oder Signalen wurde das Merkmal \texttt{stop\_proximity} entworfen (Rang 5). 
-Um eine Singularität bei Erreichen des Zielpunktes ($D = 0$) zu vermeiden, wird die inverse Distanz unter Addition einer Konstanten berechnet:
-
-\begin{equation}
-    \text{stop\_proximity}_t = \frac{1}{|D_{\text{STPDISTANCE}, t}| + 1}
-\end{equation}
-
-ML-theoretisch und physikalisch stellt diese nicht-lineare Transformation einen brillanten Bremsindikator dar. 
-Der Wert verharrt auf langen Streckenabschnitten nahe null und steigt exakt in der kritischen Phase kurz vor dem Haltepunkt exponentiell an, was dem Modell ein klares, starkes Signal für den Bremseinsatz liefert. 
-Die praktische Nutzbarkeit in diesem spezifischen Anwendungsfall wird jedoch durch ein fundamentales Datenproblem stark limitiert: 
-Wie die explorative Datenanalyse ergab, weist das zugrundeliegende Rohsignal \texttt{D\_STPDISTANCE} lediglich eine nutzbare Abdeckung (Coverage) von 38\,\% auf. 
-Ein Modell, das bei der Prädiktion der Bremskurve ein hohes Gewicht auf dieses Feature legt, würde in den restlichen 62\,\% der Fälle mangels Sensordaten scheitern.
-
-\subsubsection{Engineered Feature Pruning}
-
-Vor der finalen Merkmalsreduktion wird der experimentelle Kreuzterm \texttt{grad\_x\_v} explizit eingeführt, der als Interaktion aus Streckengradient und Ist-Geschwindigkeit definiert ist:
-
-\begin{equation}
-    \texttt{grad\_x\_v}_t = A_{\text{GRADIENT}, t} \cdot V_{\text{EST}, t}
-\end{equation}
-
-Die physikalische Motivation dieses Terms liegt in der Abbildung eines neigungsabhängigen Lastanteils als Proxy für topologieinduzierten Fahrwiderstand beziehungsweise zusätzlichen Antriebsbedarf. 
-Aus ML-Perspektive sollte das Produktmerkmal testen, ob eine explizite Interaktion zwischen Topologie und Fahrzustand zusätzliche nicht-lineare Information gegenüber den Einzelmerkmalen bereitstellt. 
-Die Evaluation zeigt jedoch einen sehr geringen Informationsgehalt (Spearman $\rho = 0{,}06$, \gls{MI} $= 0{,}05$, standardisierter \gls{OLS}-Koeffizient $\beta = 0{,}06$, Rang 7). 
-Ursächlich sind insbesondere die bereits schwache Grundkorrelation des Gradientsignals (Spearman $\rho = 0{,}09$) sowie die begrenzte Datenqualität durch Fehlwerte im Topologiekanal. 
-Folglich erzeugt \texttt{grad\_x\_v} überwiegend zusätzliches Rauschen, erhöht die multiplikative Komplexität des Eingangsraums und liefert keinen belastbaren statistischen Mehrwert gegenüber den Einzel-Features; der Kreuzterm wird daher strikt aus dem finalen State Space ausgeschlossen.
-
-Um die Erkenntnisse der Tri-Metrik-Evaluation zusammenzuführen und den finalen Eingangsvektor für das neuronale Netz zu definieren, werden die berechneten Wichtigkeiten in Abbildung \ref{fig:engineered_importance} visuell gegenübergestellt. 
-Die Darstellung veranschaulicht eindrucksvoll die Notwendigkeit mehrerer Evaluierungsansätze: 
-Insbesondere die Divergenz zwischen der Spearman-Korrelation und der \gls{MI} offenbart wertvolle, rein nicht-lineare Zusammenhänge, die von klassischen Korrelationsmaßen ignoriert werden, wie es signifikant bei der gleitenden Geschwindigkeitsstreuung (\texttt{v\_roll\_std\_2s}) der Fall ist.
-
-\begin{figure}[htbp]
+\begin{figure}[h]
     \centering
-    \includegraphics[width=1\textwidth]{06_engineered_importance.png}
-    \caption[Vergleich der Feature-Wichtigkeit]{Vergleich der Feature-Wichtigkeit anhand dreier komplementärer Metriken. Die Divergenz zwischen Spearman-Korrelation und \gls{MI} offenbart rein nicht-lineare Zusammenhänge (z.\,B. bei \texttt{v\_roll\_std\_2s}).}
+    \includegraphics[width=\textwidth]{06_engineered_importance.png}
+    \caption[Wichtigkeit der engineerten Features]{Wichtigkeit der acht engineerten Features für das Label \texttt{M\_ATO\_RTBRq}, bewertet anhand von drei komplementären Maßen: dem Betrag der Spearman-Korrelation (blau), der normierten Transinformation \gls{MI} (grün) und dem Betrag des standardisierten OLS-Koeffizienten aus einer multivariaten Regression (rot).}
     \label{fig:engineered_importance}
 \end{figure}
 
-Basierend auf dieser quantitativen Datenlage erfolgt das abschließende Feature Pruning. 
-In diesem Schritt werden gezielt Variablen aus dem Datensatz entfernt, die keinen unabhängigen Mehrwert liefern oder die numerische Stabilität des Trainings gefährden. 
-Konsequent verworfen werden hochgradig redundante Merkmale wie die absolute Geschwindigkeitsreserve \texttt{v\_headroom}, deren Informationsgehalt bereits durch die robustere und normierte relative Ausnutzung \texttt{v\_ratio} abgedeckt ist. 
-Ebenfalls ausgeschlossen wird die numerische Beschleunigungsableitung \texttt{a\_num} ($dV/dt$): Trotz hoher univariat-monotoner Relevanz ist dieses Feature im multivariaten Kontext stark kollinear zur direkt gemessenen Beschleunigung \texttt{A\_EST} beziehungsweise zu deren geglätteter Repräsentation \texttt{a\_est\_roll\_mean\_2s}. 
-Damit liefert \texttt{a\_num} keinen substanziellen zusätzlichen Informationsgewinn, verstärkt jedoch aufgrund der numerischen Differentiation stochastisches Hochfrequenzrauschen und bläht den Eingangsraum unnötig auf. 
-Neben \texttt{a\_num} werden auch stark verrauschte oder prädiktiv unbedeutende Variablen, darunter der Ruck (\texttt{jerk}) sowie weitere experimentelle Kreuzterme wie \texttt{grad\_x\_v}, aus dem finalen Merkmalsraum ausgeschlossen. 
-Zugunsten eines orthogonalen, schlanken State Space werden folglich die physikalisch stabileren Beschleunigungsrepräsentationen \texttt{A\_EST} und \texttt{a\_est\_roll\_mean\_2s} priorisiert, während \texttt{a\_num} verworfen wird.
+Diese Muster lassen sich wie folgt interpretieren: \texttt{a\_est\_roll\_mean\_2s} und \texttt{a\_num} zeigen die stärkste Gesamtrelevanz für das Label, da sie in allen drei Maßen konsistent hohe Werte erzielen. Bemerkenswert ist der Fall von \texttt{jerk}: Obwohl seine univariate Spearman-Korrelation nahezu null ist, trägt es im multivariaten Modell durchaus relevant bei. Das deutet darauf hin, dass sich sein Erklärungsgehalt erst im Zusammenspiel mit anderen Features zeigt -- bei einer rein univariaten Betrachtung wäre \texttt{jerk} fälschlich als irrelevant eingestuft worden. Ähnlich verhält es sich bei \texttt{v\_headroom} und \texttt{v\_ratio}: Beide weisen nur moderate lineare Korrelationen auf, gleichzeitig aber die höchste Transinformation aller betrachteten Features. Das deutet auf einen ausgeprägt nichtlinearen Zusammenhang zum Label hin, den eine reine Korrelationsbetrachtung übersehen würde.
 
-Für die Modellgüte ist dieser Reduktionsschritt entscheidend. 
-Die bewusste Konzentration auf ein schlankes Modell mit weitestgehend orthogonalen, also mathematisch unabhängigen, Features verhindert effektiv den Fluch der Dimensionalität (Curse of Dimensionality). 
-Ein kompakter, informationsdichter Zustandsraum entlastet den Optimierungsalgorithmus und reduziert die Gefahr irrelevanter Parameteranpassungen. 
-Vor allem minimiert diese Strenge bei der Merkmalsauswahl das im Offline-Imitationslernen omnipräsente Risiko des Overfittings, da dem neuronalen Netz signifikant weniger Rauschquellen und Scheinkorrelationen zur fälschlichen Überanpassung (Memorization) zur Verfügung gestellt werden.
+Abschließend wurde die Zielgröße selbst genauer betrachtet, da ihre Verteilungseigenschaften direkten Einfluss auf die spätere Wahl der Verlustfunktion sowie auf ein mögliches Klassenungleichgewicht haben. \autoref{fig:label_analysis} zeigt dazu zwei Darstellungen nebeneinander.
 
-\subsection{Vorverarbeitung und Datensplitting}
+Die linke Darstellung zeigt ein Balkendiagramm mit dem Anteil dreier Kategorien an allen Zeitschritten: \glqq Bremsen\grqq{} (Label $<0$), \glqq Halten\grqq{} (Label $=0$) und \glqq Beschleunigen\grqq{} (Label $>0$). Mit 48{,}6\,\% entfällt der größte Anteil der Zeitschritte auf Beschleunigungsanforderungen, gefolgt von 32{,}8\,\% Bremsanforderungen; die restlichen 18{,}6\,\% sind neutrale Anforderungen ohne Zug- oder Bremskraft.
 
-Bevor der Datensatz dem neuronalen Netz zur Verarbeitung übergeben werden kann, müssen die bereinigten Rohdaten sowie die neu konstruierten physikalischen Merkmale in ein maschinenlesbares und numerisch stabiles Format überführt werden. 
-Zudem ist eine methodisch stringente Aufteilung der Datenbasis konstitutiv, um das Modell im späteren Verlauf robust trainieren und objektiv sowie generalisierbar evaluieren zu können.
+Die rechte Darstellung zeigt ein Histogramm der von null verschiedenen Labelwerte im normierten Wertebereich $[-1,1]$. Der überwiegende Teil der Werte konzentriert sich in einem schmalen Bereich knapp oberhalb von null, mit einer deutlich kleineren zweiten Anhäufung bei etwa $0{,}15$ bis $0{,}2$; zu größeren Beträgen hin fällt die Häufigkeit stetig ab. An beiden Rändern der Verteilung, bei $\pm 1$, sind zusätzlich isolierte, vom übrigen Verlauf abgesetzte Balken erkennbar.
 
-\subsubsection{Finale Feature-Auswahl und Label-Glättung}
-
-Aufbauend auf der vorangegangenen Evaluierung definiert sich der finale Eingangsvektor (State Space) des Modells aus exakt acht Merkmalen. 
-Diese setzen sich aus vier bereinigten Sensor-Rohdaten und vier abgeleiteten, domänenspezifischen Features zusammen. 
-Variablen, die das Risiko von Data-Leakage bargen (insbesondere \texttt{M\_RST\_TBsetVal}, siehe Abschnitt \ref{sec:leakage_mrst}), multivariat redundant waren (wie \texttt{a\_num}) oder primär aus Rauschen bestanden (wie \texttt{jerk}), wurden endgültig aus dem Datensatz entfernt. 
-Tabelle \ref{tab:final_features} bietet eine strukturierte Übersicht der finalen Modelleingänge.
-
-\begin{table}[htbp]
+\begin{figure}[h]
     \centering
-    \caption[Finaler Feature-Vektor]{Übersicht des finalen Feature-Vektors für das Modelltraining.}
+    \includegraphics[width=\textwidth]{07_label_analysis.png}
+    \caption[Verteilung des Labels \texttt{M\_ATO\_RTBRq}]{Verteilung des Labels \texttt{M\_ATO\_RTBRq}: Anteil der drei Vorzeichenkategorien Bremsen, Halten und Beschleunigen (links) sowie Häufigkeitsverteilung der von null verschiedenen Labelwerte im normierten Wertebereich $[-1,1]$ (rechts).}
+    \label{fig:label_analysis}
+\end{figure}
+
+Diese Beobachtungen lassen sich fahrdynamisch einordnen: Die rechtsschiefe Form spiegelt wider, dass kleine bis moderate Anforderungen im Alltag deutlich häufiger vorkommen als betragsmäßig große. Die isolierten Häufungen bei $\pm 1$ entsprechen der jeweiligen Maximalanforderung, also einer vollständigen Anfahrt bzw. einer Vollbremsung. Diese Schiefe und die vergleichsweise seltenen, aber betragsmäßig großen Extremwerte liefern eine empirische Grundlage für die spätere Abwägung robuster Verlustfunktionen wie des \emph{Huber-Loss}. Dieser bestraft kleine Fehler wie der quadratische Verlust, geht bei großen Fehlern jedoch nur noch linear und damit weniger empfindlich gegenüber Ausreißern in die Bewertung ein.
+
+In der Zusammenschau aus Korrelationsanalyse, multivariater Relevanzbewertung und den in Abschnitt~\ref{subsubsec:datenqualitaet} dokumentierten Verfügbarkeitsanteilen ergibt sich der in \autoref{tab:final_features} zusammengefasste finale Feature-Vektor. Drei zunächst betrachtete Signale werden dabei bewusst nicht aufgenommen:
+\begin{itemize}
+    \item \texttt{TOPO\_Q\_RADIUS} entfällt wegen seiner geringen Verfügbarkeit (nur rund 17\,\% der Zeitschritte) in Kombination mit seiner vernachlässigbaren Korrelation zum Label,
+    \item \texttt{M\_RST\_SlipSlide} entfällt wegen seiner nahezu fehlenden Korrelation zum Label ($\rho = -0{,}03$),
+    \item \texttt{M\_RST\_TBsetVal} wird trotz seiner hohen statistischen Korrelation ($\rho = 0{,}76$) bewusst ausgeschlossen, da es -- wie oben erläutert -- inhaltlich zu nah an der Zielgröße selbst liegt.
+\end{itemize}
+
+\begin{table}[h]
+    \centering
+    \small
+    \caption[Finaler Feature-Vektor]{Finaler Feature-Vektor nach Datenqualitätsprüfung und Relevanzbewertung.}
     \label{tab:final_features}
-    \renewcommand{\arraystretch}{1.2}
-    \begin{tabular}{|l|l|l|}
-        \hline
-        \textbf{Kategorie} & \textbf{Feature-Name} & \textbf{Beschreibung / Typ} \\
-        \hline
-        \multirow{4}{*}{Roh-Sensorik} 
-        & \texttt{V\_EST} & Ist-Geschwindigkeit des Zuges \\
-        & \texttt{V\_PERMITTED} & Zulässige Höchstgeschwindigkeit (Streckenlimit) \\
-        & \texttt{A\_EST} & Geschätzte physikalische Beschleunigung \\
-        & \texttt{A\_GRADIENT} & Streckengradient (Topologie) \\
-        \hline
-        \multirow{4}{*}{Engineered} 
-        & \texttt{v\_ratio} & Relative Ausnutzung des Limits ($V_{\text{EST}} / V_{\text{PERMITTED}}$) \\
-        & \texttt{a\_est\_roll\_mean\_2s} & Geglättete Beschleunigung über 2 Sekunden \\
-        & \texttt{v\_roll\_std\_2s} & Gleitende Streuung der Geschwindigkeit (Volatilität) \\
-        & \texttt{stop\_proximity} & Transformierte Distanz zum nächsten Haltepunkt \\
-        \hline
-    \end{tabular}
+    \begin{tabularx}{\textwidth}{@{} l l X @{}}
+        \toprule
+        \textbf{Feature} & \textbf{Typ} & \textbf{Beschreibung} \\
+        \midrule
+        \texttt{V\_EST} & Roh & Ist-Geschwindigkeit \\
+        \texttt{V\_PERMITTED} & Roh & Zulässige Höchstgeschwindigkeit \\
+        \texttt{A\_EST} & Roh & Geschätzte Ist-Beschleunigung \\
+        \texttt{A\_GRADIENT} & Roh & Streckengradient \\
+        \texttt{D\_STPDISTANCE} & Roh & Distanz zum nächsten Halt \\
+        \midrule
+        \texttt{a\_num} & Engineered & Numerische Beschleunigung (vgl. Gl.~\eqref{eq:a_num}) \\
+        \texttt{a\_est\_roll\_mean\_2s} & Engineered & Gleitender Mittelwert von \texttt{A\_EST} (vgl. Gl.~\eqref{eq:a_roll_mean}) \\
+        \texttt{v\_roll\_std\_2s} & Engineered & Gleitende Std.-Abw. von \texttt{V\_EST} (vgl. Gl.~\eqref{eq:v_roll_std}) \\
+        \texttt{jerk} & Engineered & Änderungsrate der Beschleunigung (vgl. Gl.~\eqref{eq:jerk}) \\
+        \texttt{v\_headroom} & Engineered & Verbleibende Geschwindigkeitsreserve (vgl. Gl.~\eqref{eq:v_headroom}) \\
+        \texttt{v\_ratio} & Engineered & Normierte Geschwindigkeitsausnutzung (vgl. Gl.~\eqref{eq:v_ratio}) \\
+        \texttt{stop\_proximity} & Engineered & Transformierte Nähe zum Halt (vgl. Gl.~\eqref{eq:stop_proximity}) \\
+        \texttt{grad\_x\_v} & Engineered & Interaktion Gradient $\times$ Geschwindigkeit (vgl. Gl.~\eqref{eq:grad_x_v}) \\
+        \midrule
+        \texttt{M\_ATO\_RTBRq} & Label & Angeforderte Hebelstellung (Ziel) \\
+        \bottomrule
+    \end{tabularx}
 \end{table}
 
-Parallel zur Merkmalsselektion erfolgte eine temporale Glättung der Zielvariable (Label). 
-Für das Training wurde die rohe Hebelstellung (\texttt{M\_ATO\_RTBRq}) über einen zentrierten gleitenden Mittelwert geglättet (fünf Samples, entsprechend einer Sekunde im 200-ms-Raster). 
-Diese Label-Glättung ist methodisch von zentraler Bedeutung, um hochfrequentes, menschliches „Fahrer-Zittern“ am Hebel herauszufiltern. 
-Das neuronale Netz soll in der Optimierung nicht dazu gezwungen werden, diese stochastischen Mikrobewegungen der menschlichen Hand zu imitieren, sondern die zugrundeliegende, makroskopische und physikalisch sinnvolle Brems- und Beschleunigungsentscheidung zu erlernen.
+\subsection{Trip-Level-Splitting}
+\label{subsec:split}
 
-\subsubsection{Trip-basiertes Dataset-Splitting}
+Wie bereits in Abschnitt~\ref{sec:abgrenzung} methodisch begründet, wird der Datensatz nicht auf Ebene einzelner Zeitschritte in Trainings-, Validierungs- und Testmenge aufgeteilt, sondern strikt auf Ebene vollständiger Fahrten (Trips). Der Grund dafür: Zeitlich benachbarte Zeitschritte derselben Fahrt ähneln sich stark, da sich Geschwindigkeit und Fahrzustand von einem 200-ms-Schritt zum nächsten kaum ändern. Würden solche benachbarten Zeitschritte auf Training und Test verteilt, kennt das Modell die Testsituation im Grunde schon aus dem Training -- man spricht dann von \emph{Data Leakage} (Datenlecks). Das Testergebnis würde dadurch unrealistisch optimistisch ausfallen. Dieses Unterkapitel beschreibt, wie die Aufteilung auf Trip-Ebene konkret und nachvollziehbar umgesetzt wird.
 
-Um die Generalisierungsfähigkeit des Modells validieren zu können, wurde der Datensatz in drei disjunkte Mengen unterteilt. 
-Das definierte Zielverhältnis bezogen auf die Gesamtfahrzeit lag bei 75\,\% für das Training, 15\,\% für die Validierung und 10\,\% für den finalen Test. 
+\subsubsection{Ausschlusskriterien vor dem Split}
 
-Anstatt die Daten auf Zeilenebene aufzuteilen, wurde ein Trip-basierter \textit{Greedy Longest-First}-Algorithmus angewandt. 
-Hierbei wurden alle Fahrten (Trips) zunächst absteigend nach ihrer Dauer sortiert. 
-Anschließend wurde jede Fahrt iterativ als ungeteilter Block jenem Split (Train, Validation oder Test) zugewiesen, der prozentual zu diesem Zeitpunkt am weitesten von seinem definierten Zielwert entfernt war. 
-Dieses Verfahren resultierte in einer hochpräzisen Aufteilung: Das Trainings-Set umfasst 208 Trips (109 Stunden), das Validierungs-Set 106 Trips (21,8 Stunden) und das Test-Set 89 Trips (14,5 Stunden).
+Bereits bei der Trip-Extraktion, also noch vor der eigentlichen Aufteilung, werden mehrere Qualitätskriterien angewendet. Fahrten mit einer Dauer von weniger als 40 Sekunden werden verworfen, da sie kaum aussagekräftige Fahrsituationen enthalten. Außerdem muss ein Trip sowohl ein Start- als auch ein Endereignis besitzen -- intern als \texttt{nid6} bzw. \texttt{nid31} bezeichnet --, um als vollständig zu gelten; diese beiden Ereignisse markieren jeweils den Anfang und das Ende der zugrunde liegenden Streckenabschnittslogik. Beschädigte oder nicht lesbare Aufzeichnungsabschnitte werden übersprungen. Größere Datenlücken innerhalb einer einzelnen Aufzeichnung führen zudem dazu, dass diese Aufzeichnung in mehrere eigenständige Trips aufgeteilt wird. Der eigentliche Splitting-Prozess arbeitet also bereits auf einer vorbereinigten Menge von 1{.}388 Trips.
 
-Eine rechnerische Folge dieses Vorgehens ist jedoch eine systematische Asymmetrie in den mittleren Trip-Längen: 
-Durch die priorisierte Zuweisung langer Fahrten in den jeweils am stärksten unterfüllten Ziel-Eimer entsteht im Trainings-Set eine deutlich höhere mittlere Fahrtdauer von etwa 31 Minuten pro Trip, während das Validierungs-Set im Mittel bei rund 12 Minuten und das Test-Set bei rund 10 Minuten liegt. 
-Damit geht ein zusätzlicher Verteilungsunterschied einher: Das Training enthält überproportional viele eingeschwungene Beharrungsphasen längerer Streckenfahrten, wohingegen Validation und Test pro Zeiteinheit relativ mehr Anfahr-, Brems- und Übergangsprozesse abbilden. 
-Aus ML-Sicht ist diese Asymmetrie kritisch zu dokumentieren, sie wirkt jedoch zugleich als bewusst harter Generalisierungstest: 
-Das Modell muss zeigen, dass auf langen Sequenzen erlernte zeitliche Abhängigkeiten robust auf kürzere, dynamischere Fahrabschnitte übertragbar sind, anstatt lediglich monotone Reisefahrtmuster zu memorisieren.
+\subsubsection{Split-Verhältnis und Zuordnungsverfahren}
 
-Die ML-Begründung für dieses Vorgehen liegt in der strikten Vermeidung von temporalem Data-Leakage. 
-Ein zufälliges Mischen (Random Shuffle) einzelner Zeilen über den gesamten Datensatz würde die Kausalität der Zeitreihen unwiderruflich zerstören. 
-Das Netzwerk würde im Training zwangsläufig Samples aus der „Zukunft“ einer Fahrt sehen und könnte diese Informationen nutzen, um bei der Validierung künstlich zu glänzen. 
-Der Trip-basierte Split garantiert stattdessen, dass die Validation- und Test-Sets zu 100\,\% aus ungesehenen, in sich geschlossenen und völlig neuen Fahrtsituationen bestehen.
+Die Aufteilung erfolgt im Zielverhältnis 85\,\% Training, 10\,\% Validierung und 5\,\% Test. Dieses Verhältnis bezieht sich jedoch nicht auf die Anzahl der Trips, sondern auf die aufgezeichnete Fahrzeit in Stunden. Der Grund: Die einzelnen Trips sind sehr unterschiedlich lang. Würde man stattdessen einfach nach Trip-Anzahl aufteilen, könnten wenige sehr lange Fahrten eine Menge dominieren und das eigentlich gewünschte Zeitverhältnis der drei Splits verzerren. \autoref{tab:split_overview} zeigt die resultierende Aufteilung. Da überproportional viele kurze Trips in Validierung und Test landen, weicht deren prozentualer Anteil an der Trip-Anzahl deutlich vom Zeitverhältnis ab.
 
-\subsubsection{Skalierung und Imputation}
+\begin{table}[h]
+    \centering
+    \small
+    \caption[Trip-Level-Aufteilung]{Übersicht der Trip-Level-Aufteilung nach Fahrzeit und Trip-Anzahl.}
+    \label{tab:split_overview}
+    \begin{tabularx}{\textwidth}{@{} l X X X X @{}}
+        \toprule
+        \textbf{Split} & \textbf{Trips} & \textbf{Anteil Trips} & \textbf{Fahrzeit} & \textbf{Anteil Zeit} \\
+        \midrule
+        Training    & 757   & 54,5\,\% & 151,50\,h & 85,0\,\% \\
+        Validierung & 370   & 26,7\,\% & 17,82\,h  & 10,0\,\% \\
+        Test        & 261   & 18,8\,\% & 8,90\,h   & 5,0\,\% \\
+        \midrule
+        Gesamt      & 1{.}388 & 100\,\%  & 178,22\,h & 100\,\% \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
 
-Im letzten Vorverarbeitungsschritt wurden sowohl die Eingangsfeatures als auch die Zielvariable skaliert, um eine einheitliche Werteverteilung für den Optimierungsalgorithmus zu gewährleisten und numerische Instabilitäten zu vermeiden.
+Die konkrete Zuordnung einzelner Trips zu den drei Mengen erfolgt nicht zufällig, sondern nach einem festen, zweistufigen Verfahren.
 
-Für die Eingangsdaten geschah dies in einem zweistufigen Prozess: 
-Zunächst wurden extreme Ausreißer eliminiert, indem die Rohdaten auf das 0,5\,\%- und 99,5\,\%-Perzentil ($q_{\text{low}}$ und $q_{\text{high}}$) beschnitten wurden (Clipping):
+Im ersten Schritt werden die Trips anhand ihres Bremsanteils -- also dem Anteil der Zeitschritte mit negativem Label -- in bis zu fünf Gruppen mit jeweils ähnlichem Bremsanteil eingeteilt. Diese Gruppenbildung nennt man Stratifizierung; sie stellt sicher, dass später in jeder der drei Mengen (Training, Validierung, Test) ein vergleichbarer Anteil an Bremsphasen vorhanden ist.
 
-\begin{equation}
-    x_{\text{clipped}} = \min(\max(x, q_{\text{low}}), q_{\text{high}})
-\end{equation}
+Im zweiten Schritt werden die Trips innerhalb jeder dieser Gruppen nach dem Prinzip \emph{longest-first} verteilt: Von den noch nicht zugeordneten Trips wird immer der längste zuerst vergeben, und zwar an diejenige Menge, die -- gemessen an ihrem Zeitbudget aus \autoref{tab:split_overview} -- aktuell am weitesten hinterherhinkt. So füllen sich Training, Validierung und Test gleichmäßig auf ihr jeweiliges Zeitbudget auf, während gleichzeitig der Bremsanteil aus dem ersten Schritt in allen drei Mengen vergleichbar bleibt.
 
-Anschließend erfolgte eine Z-Score-Standardisierung. 
-Die zuvor geclippten Merkmale wurden hierbei in einen Wertebereich transformiert, der einen Mittelwert von exakt $\mu = 0$ und eine Standardabweichung von $\sigma = 1$ aufweist:
+Eine zusätzliche Aufteilung nach Lokomotive oder Triebfahrzeugführer findet dagegen bewusst nicht statt. Die Lokomotiven-ID wird zwar im sogenannten Split-Manifest vermerkt -- einer Tabelle, die jedem Trip seinen zugewiesenen Split zuordnet --, fließt jedoch nicht in die Zuordnung selbst ein.
 
-\begin{equation}
-    x_{\text{scaled}} = \frac{x_{\text{clipped}} - \mu_{\text{train}}}{\sigma_{\text{train}}}
-\end{equation}
+Da weder eine zufällige Ziehung noch ein Random Seed -- ein Startwert, der einen Zufallsgenerator reproduzierbar macht -- zum Einsatz kommt, sondern ausschließlich feste Sortier- und Zuordnungsregeln, ist der Split vollständig deterministisch. Das bedeutet: Bei identischen Eingangsdaten entsteht immer exakt dieselbe Aufteilung. Das wiederum stellt sicher, dass sich die nachfolgenden Experimente reproduzieren lassen.
 
-Die Reihenfolge und Methodik dieses Schrittes erfordert höchste methodische Disziplin zur Verhinderung von \textit{Scaling-Leakage}. 
-Die Berechnung der Quantilsgrenzen ($q_{\text{low}}$, $q_{\text{high}}$) sowie von Mittelwert ($\mu_{\text{train}}$) und Standardabweichung ($\sigma_{\text{train}}$) wurde ausnahmslos und ausschließlich auf dem isolierten Trainingsdatensatz (Train-Split) durchgeführt. 
-Diese statistischen Parameter wurden anschließend eingefroren, in einer \texttt{scaler.json}-Datei gespeichert und deterministisch auf das Validation- und Test-Set angewandt. 
-Hätte man den Datensatz vor dem Splitting als Gesamtheit skaliert, wären statistische Verteilungsinformationen aus dem Test-Set implizit in das Training eingeflossen. 
+\subsubsection{Charakterisierung und kritische Einordnung der Splits}
 
-Verbleibende \texttt{NaN}-Werte in den Eingangsfeatures, die beispielsweise durch Lückenfüller am Rande von Trips entstanden sind, wurden nach der Skalierung systematisch durch den Wert $0$ ersetzt. 
-Diese Imputation birgt einen mathematisch eleganten ML-Vorteil: 
-Da der Mittelwert jedes Features im Z-Raum durch die Standardisierung exakt $0$ beträgt, entspricht das Einsetzen der Null exakt dem Durchschnittswert des jeweiligen Features. 
-Fehlt dem Modell somit punktuell eine Sensorinformation, erhält es den neutralsten aller möglichen Werte, wodurch das Netzwerk in seiner Prädiktion am wenigsten in die Irre geführt wird.
+Um zu prüfen, ob die drei Mengen tatsächlich vergleichbare Fahrsituationen abbilden, wurden sie anhand mehrerer Kennzahlen verglichen (siehe \autoref{tab:split_characteristics}).
 
-Für das Feature \texttt{stop\_proximity} besitzt diese Entscheidung besondere Relevanz, da dessen Datenabdeckung lediglich bei rund 38\,\% liegt und in etwa 62\,\% der Zeitschritte kein explizites Distanzsignal vorliegt. 
-Die Nullimputation nach der Z-Score-Transformation ist in diesem Fall technisch konsistent, weil sie in Phasen ohne aktiven Haltepunkt den neutralen Erwartungswert einspeist und damit keine systematische Verzerrung der Gradientenupdates im Backpropagation-Prozess induziert. 
-Gleichzeitig ist diese Lücke fachlich nicht als reiner Datenfehler zu interpretieren, sondern als Abbild des Betriebszustands auf freier Strecke ohne unmittelbar bevorstehenden \gls{ATO}-Halt. 
-Kritisch bleibt jedoch, dass das Modell in diesen 62\,\% der Zeitpunkte Bremsentscheidungen nur aus sekundären Kinematik- und Limit-Signalen (insbesondere \texttt{V\_EST}, \texttt{V\_PERMITTED}, \texttt{A\_EST}) ableiten kann. 
-Damit verschiebt sich die Annäherungslogik an Halte- oder Restriktionspunkte implizit von einem kontinuierlichen Distanzhinweis auf indirekte Veränderungen der zulässigen Geschwindigkeit \texttt{V\_PERMITTED}, was eine strukturelle Limitation des Zustandsraums transparent macht.
+Der Bremsanteil -- also das Kriterium, nach dem oben stratifiziert wurde -- liegt mit rund 32,5 bis 32,8\,\% in allen drei Mengen nahezu identisch. Das bestätigt, dass die Stratifizierung wie gewünscht funktioniert hat.
 
-Analog zur Behandlung der Features wurde im selben Schritt auch die geglättete Zielvariable (Label) transformiert. 
-Die Hebelstellung \texttt{M\_ATO\_RTBRq} wurde durch den systemspezifischen Maximalwert von $16384$ dividiert und anschließend strikt auf das zulässige Intervall $[-1, 1]$ geclippt. 
-In dieser standardisierten Repräsentation definieren positive Werte eine Beschleunigungsanforderung, während negative Werte einen Bremsvorgang kodieren. 
-Diese Skalierung fängt physikalisch unmögliche Spitzen ab und garantiert die numerische Stabilität der späteren Verlustfunktion:
+Der Anteil an Beschleunigungs- und Halteanforderungen unterscheidet sich dagegen merklich zwischen dem Training einerseits und Validierung sowie Test andererseits. Das lässt sich direkt auf das Zuordnungsverfahren zurückführen: Weil nach dem Prinzip longest-first zugeteilt wird und das Trainingsbudget mit 85\,\% der Zeit mit Abstand am größten ist, werden dem Training bevorzugt sehr lange Trips zugewiesen. Solche langen Fahrten bestehen anteilig mehr aus durchgehenden Phasen mit konstanter Geschwindigkeit und enthalten dadurch weniger Halteanteile. Validierung und Test bestehen dagegen überwiegend aus kürzeren Trips. Das zeigt sich auch deutlich an der Trip-Dauer: Der längste Trip im Training dauert über 368 Minuten, während der längste Trip in Validierung bzw. Test nur rund 12 respektive 6 Minuten umfasst.
 
-\begin{equation}
-    y_{\text{scaled}} = \min\left(\max\left(\frac{\text{M\_ATO\_RTBRq}_{\text{smoothed}}}{16384}, -1\right), 1\right)
-\end{equation}
+\begin{table}[h]
+    \centering
+    \small
+    \caption[Charakterisierung der Datensplits]{Charakterisierung der drei Splits anhand von Labelverteilung, Trip-Dauer und Geschwindigkeit.}
+    \label{tab:split_characteristics}
+    \begin{tabularx}{\textwidth}{@{} l X X X @{}}
+        \toprule
+        \textbf{Kennzahl} & \textbf{Training} & \textbf{Validierung} & \textbf{Test} \\
+        \midrule
+        Bremsanteil (Label $<0$)        & 32,8\,\% & 32,8\,\% & 32,5\,\% \\
+        Beschleunigungsanteil (Label $>0$) & 49,1\,\% & 39,1\,\% & 39,2\,\% \\
+        Halteanteil (Label $=0$)        & 18,1\,\% & 28,2\,\% & 28,3\,\% \\
+        \addlinespace
+        Median Trip-Dauer               & 4,33\,min & 2,21\,min & 1,55\,min \\
+        Längster Trip                   & 368,54\,min & 12,49\,min & 6,02\,min \\
+        \addlinespace
+        Median $V_{\text{EST}}$         & 80,5\,km/h & 17,3\,km/h & 9,8\,km/h \\
+        95.\,Perzentil $V_{\text{EST}}$ & 121,5\,km/h & 113,5\,km/h & 42,4\,km/h \\
+        \bottomrule
+    \end{tabularx}
+\end{table}
+
+Besonders deutlich fällt der Unterschied in der Geschwindigkeitsverteilung aus, was für die spätere Interpretation der Modellergebnisse relevant ist. Die mediane gefahrene Geschwindigkeit liegt im Training bei rund 80\,km/h, in der Validierungsmenge nur bei etwa 17\,km/h und in der Testmenge sogar nur bei knapp 10\,km/h. Auch das 95.\,Perzentil der Testmenge -- also der Wert, unter dem 95\,\% aller gemessenen Geschwindigkeiten liegen -- fällt mit rund 42\,km/h deutlich niedriger aus als in Training und Validierung.
+
+Das bedeutet: Die Testmenge besteht überproportional aus Rangier- und Anfahrsituationen im unteren Geschwindigkeitsbereich, während Trainings- und Validierungsdaten deutlich mehr Streckenabschnitte mit konstanter Reisegeschwindigkeit enthalten. Diese Verzerrung ist eine unmittelbare Folge davon, dass ausschließlich nach Bremsanteil stratifiziert wurde: Andere Merkmale wie Geschwindigkeit oder Fahrzeugtyp wurden bei der Split-Bildung nicht berücksichtigt und deshalb auch nicht angeglichen.
+
+Eine vollständige statistische Prüfung, ob sich die Verteilungen aller Features zwischen den drei Mengen tatsächlich gleichen -- etwa mit einem Kolmogorov-Smirnov-Test, der prüft, ob zwei Stichproben aus derselben Verteilung stammen könnten --, wurde im Rahmen dieser Arbeit nicht durchgeführt. Die hier dokumentierten Kennzahlen stellen daher nur eine erste, orientierende Prüfung dar.
+
+Dieser Umstand wird hier bewusst offen benannt, da er bei der späteren Bewertung der Testmetriken in Kapitel~\ref{sec:evaluation} berücksichtigt werden muss: Eine im Testset gemessene Modellgüte bezieht sich vorwiegend auf Fahrsituationen mit niedriger Geschwindigkeit und häufigen Start-Stopp-Vorgängen und lässt sich nicht ohne Weiteres auf das gesamte Geschwindigkeitsspektrum der Betuweroute übertragen.
+
+Als Konsistenzprüfung lässt sich der in Abschnitt~\ref{subsubsec:feature_auswahl} berichtete Gesamt-Halteanteil von rund 19,5\,\% heranziehen. Gewichtet man die splitspezifischen Halteanteile aus \autoref{tab:split_characteristics} mit dem jeweiligen Zeitanteil aus \autoref{tab:split_overview}, ergibt sich ein gewichteter Mittelwert von rund 19,6\,\%. Dieser Wert stimmt sehr genau mit dem zuvor auf dem Gesamtdatensatz beobachteten Anteil überein und bestätigt damit zusätzlich die Plausibilität der Split-Kennzahlen.
+
+\subsubsection{Datenexport und Data-Leakage-Prävention}
+
+Nach Abschluss der Zuordnung werden die Daten getrennt in drei Dateien abgelegt: \texttt{train.parquet}, \texttt{val.parquet} und \texttt{test.parquet} (Parquet ist ein spaltenorientiertes Dateiformat für große Tabellen). Innerhalb jeder Datei sind die Zeitschritte zeitlich geordnet, und zwar über die Spalten \texttt{unit} (Kennung der Aufzeichnungseinheit bzw. Lokomotive), \texttt{tb} (Kennung des jeweiligen Trips) und \texttt{rel\_s} (relative Zeit in Sekunden seit Tripbeginn).
+
+Eine Fenster- bzw. Sequenzbildung -- also das Zusammenfassen mehrerer aufeinanderfolgender Zeitschritte zu einer Eingabesequenz, wie sie für sequenzfähige Architekturen gemäß Abschnitt~\ref{sec:theoretische_grundlagen} benötigt wird -- findet an dieser Stelle noch nicht statt. Sie erfolgt erst später, im Rahmen des Modelltrainings in Kapitel~\ref{sec:training}.
+
+Entscheidend ist dabei, dass diese Fensterbildung stets unabhängig innerhalb der bereits getrennten Splits erfolgen muss. Da Training, Validierung und Test zu diesem Zeitpunkt bereits als separate Dateien vorliegen, kann kein Zeitfenster über die Grenze zweier Splits hinweg gebildet werden. Damit ist die in Abschnitt~\ref{sec:abgrenzung} geforderte vollständige Entkopplung der drei Mengen auf Zeitschrittebene durchgängig gewährleistet.

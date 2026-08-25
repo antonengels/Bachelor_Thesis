@@ -1,17 +1,416 @@
-\section{Implementierung und Training}
+\section{Implementierung und finales Training}
+\label{sec:training}
 
-\subsection{Entwicklungsumgebung}
-Dieses Kapitel dokumentiert die verwendete Hardware, Software und Frameworks (Python, PyTorch) zur Sicherstellung der wissenschaftlichen Reproduzierbarkeit.
+Nachdem in Kapitel~\ref{sec:konzeption} sowohl die Architektur des neuronalen Netzes als auch Optimierer und Verlustfunktion empirisch festgelegt wurden, widmet sich das vorliegende Kapitel der konkreten Implementierung sowie dem finalen Training des Modells. Anders als die in Kapitel~\ref{sec:konzeption} durchgeführten Vergleichsexperimente, die bewusst auf einer reduzierten Datenmenge und mit verkürzter Epochenzahl liefen, um Architekturentscheidungen effizient und vergleichbar zu treffen, erfolgt das Training in diesem Kapitel nun auf dem vollständigen, in Kapitel~\ref{sec:daten_preprocessing} beschriebenen Datensatz.
 
-\subsection{Implementierung der Data Pipeline}
+Das Kapitel gliedert sich dazu in vier Teile. Zunächst wird in Abschnitt~\ref{subsec:technologischer_rahmen} der technologische Rahmen der Implementierung beschrieben. Anschließend werden in den Abschnitten~\ref{subsec:datenpipeline} und~\ref{subsec:trainingsloop} die konkrete Datenpipeline sowie der Trainingsloop erläutert, jeweils ergänzt um zentrale Code-Ausschnitte. Abschließend wird in Abschnitt~\ref{subsec:iteratives_training} das finale Modell in mehreren aufeinander aufbauenden Trainingsiterationen entwickelt: Ausgehend von der in Kapitel~\ref{sec:konzeption} festgelegten Baseline-Konfiguration werden die Ergebnisse jeder Iteration analysiert und daraus gezielt Anpassungen für die jeweils nächste Iteration abgeleitet, bis ein finales Modell vorliegt.
 
-\subsubsection{Dataset-Klassen}
-Dieser Abschnitt beschreibt die Programmierung der PyTorch-Schnittstelle zum Einlesen und Vorhalten der bereinigten Betriebsdaten.
+\subsection{Technologischer Rahmen}
+\label{subsec:technologischer_rahmen}
 
-\subsubsection{DataLoader und Batch-Generierung}
-Es werden Laderoutinen zur iterativen Übergabe der Zeitreihenpakete (Batches) an das Modell umgesetzt.
+Das finale Modell ist in PyTorch implementiert. Die Wahl fiel bewusst auf PyTorch und nicht auf Alternativen wie Keras oder TensorFlow: PyTorch hat sich in den letzten Jahren zum in der Forschung dominierenden Deep-Learning-Framework entwickelt -- nicht zuletzt wegen seines dynamischen Berechnungsgraphen, der das Debuggen und Experimentieren mit neuen Architekturen erleichtert, sowie der großen Zahl aktueller Forschungsarbeiten und Referenzimplementierungen, an denen sich auch diese Arbeit orientiert. In den Projektnotizen ist die lokal verwendete Umgebung mit Python~3.14.5 und PyTorch~2.13.0+cpu dokumentiert; der Code selbst ist jedoch device-agnostisch geschrieben und wählt zur Laufzeit dynamisch das jeweils verfügbare Rechengerät aus -- bevorzugt eine CUDA-fähige \gls{GPU}, andernfalls optional eine \gls{TPU} über XLA oder ein Apple-Silicon-Gerät über die MPS-Schnittstelle, und erst als letzte Stufe die \gls{CPU}.
 
-\subsection{Trainingsschleife}
-Die programmierte Trainingsschleife wird dokumentiert, einschließlich Festlegung und Begründung von Learning Rates, Batch-Sizes und Early-Stopping-Kriterien.
+Neben PyTorch selbst kommen im Wesentlichen folgende Bibliotheken zum Einsatz: NumPy für numerische Arrays, die Seed-Verwaltung sowie die Nachverarbeitung der Modellvorhersagen; Pandas für tabellarische Ergebnisexporte sowie zum Laden der in Kapitel~\ref{sec:daten_preprocessing} erzeugten Parquet-Dateien über \texttt{pd.read\_parquet}, wobei PyArrow -- sofern installiert -- als zugrundeliegendes Parquet-Backend dient; sowie Matplotlib zur Erzeugung von Lernkurven und Konfusionsmatrix-Plots (zur Visualisierung der Vorzeichentreue der Vorhersagen), die anschließend in den unten beschriebenen HTML-Report eingebettet werden. Ergänzend werden mehrere Module der Python-Standardbibliothek genutzt, darunter \texttt{pathlib}, \texttt{json}, \texttt{hashlib}, \texttt{time}, \texttt{dataclasses} und \texttt{base64}/\texttt{io}. Scikit-learn wird im finalen Trainingsskript hingegen nicht direkt eingesetzt: Skalierung und Feature-Definitionen entstammen bereits der in Kapitel~\ref{sec:daten_preprocessing} vorbereiteten Datenpipeline, sodass \texttt{model.py} lediglich zur Laufzeit prüft, ob die eingehenden Trainingsfeatures plausibel $z$-standardisiert vorliegen.
 
-\subsection{Hyperparameter-Tuning und Regularisierung}
+Auf ein externes Experiment-Tracking-Tool wie TensorBoard oder Weights\,\&\,Biases wird bewusst verzichtet. Stattdessen bleibt das finale Training bei einem einfachen, dateibasierten Logging, das aus einer Konsolenausgabe je Epoche, einem zusammenfassenden HTML-Report (\texttt{reports/model\_final\_report.html}) mit eingebetteten PNG-Lernkurven und Konfusionsmatrizen sowie exportierten CSV- und JSON-Metrikdateien (\texttt{model\_final\_metrics.csv} bzw. \texttt{.json}) besteht.
+
+Für die Reproduzierbarkeit wird durchgehend mit einem festen Seed gearbeitet, wodurch Trip-Auswahl, Dataset-Capping und Modellinitialisierung reproduzierbar sind. Eine vollständig bitgenaue Reproduzierbarkeit ist bei Ausführung auf der \gls{GPU}, durch CuDNN (NVIDIAs Beschleunigungsbibliothek für neuronale Netze auf der GPU) sowie durch mehrere parallele DataLoader-Worker jedoch nicht garantiert, da keine global deterministischen PyTorch-Algorithmen erzwungen werden.
+
+Da das finale Training mehrere Iterationen und potenziell lange Laufzeiten umfasst, wurde zudem ein echtes Resume-Checkpointing implementiert: Nach jedem Epochendurchlauf werden Modellgewichte, Optimizer-Status, Scheduler-Status, die bisherige Trainingshistorie, die besten Modellgewichte nach Validierungs-Score sowie die aktuelle Epoche persistiert. Beim Neustart eines Trainingslaufs wird ein bestehender Checkpoint nur dann geladen, wenn die zugrundeliegende Konfiguration identisch ist; dies wird über eine Hash-Signatur sichergestellt, die aus Architektur, Feature-Menge, Optimierer, Verlustfunktion, den übrigen Trainingsparametern, der Regularisierung sowie etwaigen Daten-Caps gebildet wird. Das Config-Management selbst ist bewusst einfach gehalten: Es kommen weder YAML-Dateien noch Hydra oder \texttt{argparse} zum Einsatz, sondern die Konfiguration liegt als Satz globaler Konstanten am Anfang von \texttt{model.py} und wird von dort in eine Config-Dataclass überführt. Architektonisch erwähnenswert sind darüber hinaus der Einsatz von \texttt{ReduceLROnPlateau} zur automatischen Lernraten-Anpassung, Gradient Clipping zur Stabilisierung des Trainings, optionales \gls{AMP} bei Ausführung auf CUDA-Geräten sowie Micro-Batching zur Entlastung des \gls{GPU}-Speichers.
+
+\subsection{Datenpipeline}
+\label{subsec:datenpipeline}
+
+Die Datenpipeline des finalen Trainings baut vollständig auf den bereits in Kapitel~\ref{sec:konzeption} für die Vergleichsexperimente verwendeten Komponenten auf. Die zentrale \\\texttt{SequenceDataset}-Klasse sowie die Liste der finalen Features aus Abschnitt~\ref{subsubsec:feature_auswahl} sind dabei nicht erneut in \texttt{model.py} implementiert, sondern werden unverändert aus dem bereits für die Vergleichsexperimente genutzten Modul \texttt{model\_comparison.py} importiert. Dieses Vorgehen stellt sicher, dass exakt dieselbe Fensterbildungs- und Feature-Logik verwendet wird, die bereits den Ergebnissen aus Kapitel~\ref{sec:konzeption} zugrunde lag, wodurch die dort getroffenen Konzeptionsentscheidungen unverändert auf das finale Training übertragbar bleiben. \texttt{model.py} orchestriert diese importierten Bausteine lediglich für den finalen, vollständigen Trainingslauf.
+
+Die Parameter der Sliding-Window-Bildung sind als globale Konstanten am Anfang von \texttt{model.py} definiert und entsprechen unverändert den bereits in Abschnitt~\ref{subsec:experimentelles_vorgehen} festgelegten Werten: eine Sequenzlänge von 100 Zeitschritten, ein Prädiktionshorizont von 50 Zeitschritten sowie eine Schrittweite (Stride) von 5 zwischen aufeinanderfolgenden Fenstern. Im Unterschied zu den Vergleichsexperimenten aus Kapitel~\ref{sec:konzeption}, die aus Effizienzgründen nur auf der Hälfte der Trainings-Trips liefen, wird im finalen Training jedoch mit \texttt{FRACTION = 1.0} der vollständige Datensatz verwendet.
+
+Das Laden der Daten erfolgt splitweise und getrennt über die importierte Funktion \texttt{load\_split}, welche die in Abschnitt~\ref{subsec:split} erzeugten \texttt{train.parquet}-, \texttt{val.parquet}- und \texttt{test.parquet}-Dateien einliest. Anschließend werden die drei Splits unabhängig voneinander über \texttt{build\_trip\_arrays} in Trip-Arrays überführt und zu \texttt{SequenceDataset}-Objekten verpackt. Listing~\autoref{lst:build_loaders} zeigt den entsprechenden Code-Ausschnitt aus \texttt{model.py}. Da Training, Validierung und Test dabei durchgehend als getrennte Objekte geführt werden, bleibt die in Abschnitt~\ref{subsec:split} beschriebene, strikte Trennung der drei Mengen auf Trip-Ebene auch in der finalen Trainingspipeline vollständig erhalten.
+
+\begin{lstlisting}[language=Python, caption={Laden und Aufteilen der Splits in \texttt{model.py} (gekürzt).}, label={lst:build_loaders}]
+train_df = load_split("train")
+train_trips, train_labels = build_trip_arrays(train_df, cfg, "train", rng)
+train_ds = cap_dataset(SequenceDataset(train_trips, train_labels, cfg),
+                        cfg.max_train_windows, rng)
+\end{lstlisting}
+
+Da die eigentliche $z$-Standardisierung der Features bereits in der vorgelagerten \\Preprocessing-Pipeline aus Kapitel~\ref{sec:daten_preprocessing} erfolgt, führt \texttt{model.py} an dieser Stelle keine eigene Skalierung mehr durch, sondern lediglich einen Plausibilitätscheck: Die Funktion \texttt{verify\_scaling} prüft je Feature, ob Mittelwert und Standardabweichung im Trainingssplit den für eine Z-Standardisierung erwarteten Bereichen entsprechen (Mittelwert nahe 0, Standardabweichung nahe 1), und stellt zusätzlich sicher, dass das Label innerhalb des Wertebereichs $[-1, 1]$ liegt. Fällt dieser Check negativ aus, bricht das Training kontrolliert ab, anstatt mit fehlerhaft skalierten Daten fortzufahren -- eine einfache, aber wirksame Absicherung gegen stille Fehler in der vorgelagerten Pipeline.
+
+Abschließend werden die drei \texttt{SequenceDataset}-Objekte in PyTorch-\texttt{DataLoader} mit einer Batch-Size von 2048 und vier parallelen Worker-Prozessen überführt. Während der Trainings-Loader die erzeugten Fenster bei jeder Epoche neu mischt (\texttt{shuffle=True}), bleiben Validierung und Test unverändert in ihrer ursprünglichen, zeitlichen Reihenfolge, da hier keine stochastische Optimierung, sondern eine deterministische Auswertung erfolgt.
+
+Ergänzend ist in \texttt{model.py} ein Dataset-Capping vorgesehen, über das die Anzahl der verwendeten Trips beziehungsweise Fenster je Split testweise begrenzt werden könnte. Im finalen Training sind sämtliche Cap-Parameter jedoch auf \texttt{None} gesetzt und damit deaktiviert, sodass -- im Gegensatz zu den in Kapitel~\ref{sec:konzeption} beschriebenen Vergleichsexperimenten -- tatsächlich der gesamte, ungekürzte Datensatz in das finale Training einfließt.
+
+\subsection{Trainingsloop}
+\label{subsec:trainingsloop}
+
+Die eigentliche Trainingslogik ist in der Funktion \texttt{train} in \texttt{model.py} implementiert, wobei Validierung und Checkpointing in eigene, gekapselte Funktionen ausgelagert sind. Der äußere Aufbau folgt dabei einer klassischen Epochen-Schleife, die -- im Sinne des in Abschnitt~\ref{subsec:technologischer_rahmen} beschriebenen Resume-Checkpointings -- nicht zwingend bei Epoche~1 beginnt, sondern bei einem vorhandenen, zur aktuellen Konfiguration passenden Checkpoint bei der jeweils nächsten, noch nicht trainierten Epoche fortsetzt. Listing~\autoref{lst:epoch_loop} zeigt die Grundstruktur dieser Schleife. Innerhalb jeder Epoche wird zunächst ein vollständiger Trainingsdurchlauf über alle Batches des Trainings-Loaders ausgeführt, anschließend das Modell auf dem Validierungssplit ausgewertet, die resultierenden Metriken in der Trainingshistorie protokolliert und der Scheduler sowie der Checkpoint aktualisiert.
+
+\begin{lstlisting}[language=Python, caption={Grundstruktur der Epochen-Schleife in \texttt{model.py} (gekürzt).}, label={lst:epoch_loop}]
+for epoch in range(start_epoch, cfg.epochs + 1):
+    model.train()
+    for x_cpu, y_cpu, _ in train_loader:
+        ...  # Trainingsschritt pro Batch
+
+    vl, yt, yp, _ = evaluate(model, val_loader, device)
+    m = regression_metrics(yt, yp)
+    score = val_score(m)
+
+    scheduler.step(score)
+    save_training_checkpoint(epoch, model, opt, scheduler, hist, ...)
+\end{lstlisting}
+
+Listing~\autoref{lst:train_step} zeigt den Kern des eigentlichen Trainingsschritts: Für jeden Batch wird ein Forward-Pass durch das Modell ausgeführt, der in Kapitel~\ref{sec:konzeption} als Verlustfunktion festgelegte Smooth-L1-Loss berechnet und anschließend Backpropagation sowie ein Optimizer-Schritt ausgeführt. Auf einer CUDA-fähigen \gls{GPU} wird dieser Vorgang zusätzlich um zwei Mechanismen erweitert: Zum einen wird der Batch bei Bedarf in kleinere Mikro-Batches unterteilt, um den \gls{GPU}-Speicherbedarf zu begrenzen, ohne die effektive Batch-Size für die Gradientenberechnung zu verändern. Zum anderen kommt optional \gls{AMP} zum Einsatz, wobei der Forward-Pass in reduzierter Gleitkommagenauigkeit ausgeführt wird, was die Trainingsgeschwindigkeit auf entsprechender Hardware erhöht, ohne die numerische Stabilität des Trainings zu gefährden. Auf der \gls{CPU} läuft derselbe Code hingegen ohne \gls{AMP} und ohne Mikro-Batching. Vor dem eigentlichen Optimizer-Schritt wird zusätzlich Gradient Clipping angewendet, das die Norm der Gradienten auf einen konfigurierbaren Maximalwert begrenzt und damit einzelne, durch Ausreißer im Label (vgl. Abschnitt~\ref{subsubsec:feature_auswahl}) verursachte, übermäßig große Parameter-Updates verhindert.
+
+\begin{lstlisting}[language=Python, caption={Kern des Trainingsschritts in \texttt{model.py} (stark gekürzt).}, label={lst:train_step}]
+for x_cpu, y_cpu, _ in train_loader:
+    opt.zero_grad(set_to_none=True)
+    for start in range(0, batch_n, micro_bs):
+        xb, yb = x_cpu[start:end].to(device), y_cpu[start:end].to(device)
+        with amp_ctx:
+            pred = model(xb)
+            loss = crit(pred, yb)
+        scaler.scale(loss * weight).backward()
+
+    if GRAD_CLIP_NORM > 0:
+        scaler.unscale_(opt)
+        nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP_NORM)
+    scaler.step(opt)
+    scaler.update()
+\end{lstlisting}
+
+Die Validierung erfolgt in einer separaten, mit \texttt{@torch.no\_grad()} annotierten Funktion \texttt{evaluate}, die das Modell in den Evaluationsmodus versetzt, alle Vorhersagen des Validierungssplits sammelt und daraus dieselben fünf Metriken berechnet, die bereits in Abschnitt~\ref{subsec:experimentelles_vorgehen} für die Vergleichsexperimente verwendet wurden: $R^2$, \gls{RMSE}, \gls{MAE}, Richtungs- und Toleranz-Accuracy. Für die Steuerung von Lernraten-Scheduler und Modellauswahl wird daraus jedoch nicht direkt der Val-Loss herangezogen, sondern derselbe kombinierte Val-Score aus Richtungs- und Toleranz-Accuracy, der bereits in Abschnitt~\ref{subsec:optimizer_loss} eingeführt wurde (vgl. Gleichung~\eqref{eq:val_score}). Diese Wahl ist bewusst getroffen: Während der Val-Loss lediglich die reine Regressionsgüte widerspiegelt, bildet der Val-Score direkter ab, wie praktisch brauchbar die vorhergesagte Hebelstellung tatsächlich ist -- sowohl in ihrer Richtung (Bremsen/Beschleunigen) als auch in ihrer Genauigkeit innerhalb einer definierten Toleranzschwelle. Der Lernraten-Scheduler ist als \texttt{ReduceLROnPlateau} im Modus \texttt{"max"} implementiert und reduziert die Lernrate, sobald sich dieser Val-Score über eine konfigurierbare Anzahl an Epochen hinweg nicht mehr verbessert. Nach demselben Prinzip erfolgt auch die Auswahl des finalen Modells: Nach jeder Epoche wird geprüft, ob der aktuelle Val-Score den bisher besten Wert übertrifft; ist dies der Fall, werden die aktuellen Modellgewichte als neuer Bestwert gespeichert. Am Ende des Trainings werden nicht die Gewichte der letzten, sondern die Gewichte der nach diesem Kriterium besten Epoche in das Modell zurückgeladen.
+
+Ergänzend ist ein Early-Stopping-Mechanismus implementiert, der das Training vorzeitig abbrechen kann, sobald sich der Val-Score über eine konfigurierbare Anzahl an Epochen hinweg nicht verbessert hat; die konkrete Nutzung dieses Mechanismus wird zusammen mit den übrigen Trainings-Hyperparametern erst im Rahmen der iterativen Trainingsläufe in Abschnitt~\ref{subsec:iteratives_training} festgelegt. Nach jeder Epoche wird zudem -- wie bereits in Abschnitt~\ref{subsec:technologischer_rahmen} beschrieben -- automatisch ein Checkpoint geschrieben, der neben den aktuellen Modell-, Optimizer- und Scheduler-Zuständen auch die bisherige Trainingshistorie sowie die besten bislang gefundenen Modellgewichte enthält, sodass ein unterbrochener Trainingslauf jederzeit konsistent fortgesetzt werden kann.
+
+\subsection{Iteratives Training}
+\label{subsec:iteratives_training}
+
+Aufbauend auf der in Kapitel~\ref{sec:konzeption} festgelegten Modellkonzeption sowie der in den Abschnitten~\ref{subsec:datenpipeline} und~\ref{subsec:trainingsloop} beschriebenen Implementierung erfolgt das finale Training nun nicht in einem einzelnen Durchlauf, sondern iterativ: Ausgehend von einer ersten Baseline-Konfiguration wird das Modell jeweils auf dem vollständigen Trainingsdatensatz trainiert, die Ergebnisse werden anschließend anhand des Verlaufs von Trainings- und Validierungs-Loss analysiert, und daraus wird gezielt eine Anpassung für die nächste Iteration abgeleitet.
+
+Die Bewertung jeder Iteration erfolgt dabei auf Basis des Val-Loss (\gls{MSE}) auf der Validierungsmenge. Dass hierfür der \gls{MSE} und nicht der in Kapitel~\ref{sec:konzeption} als Trainingsverlustfunktion gewählte Smooth-L1-Loss herangezogen wird, hat einen einfachen Grund: Der \gls{MSE} ist eine Standardgröße, die -- anders als Smooth-L1 -- nicht von einem zusätzlichen Schwellenwert abhängt, und wurde bereits durchgehend in Kapitel~\ref{sec:konzeption} zur Bewertung von Architektur, Netzwerkgröße sowie Optimierer und Verlustfunktion verwendet. Er dient hier also als neutraler, über alle Kapitel hinweg vergleichbarer Maßstab für die reine Regressionsgüte, während Smooth-L1 weiterhin die eigentliche, während des Trainings optimierte Zielgröße bleibt. Die Testmenge bleibt -- wie bereits in Abschnitt~\ref{subsec:split} begründet -- für sämtliche Iterationen unangetastet und wird erst für die abschließende Evaluation des finalen Modells in Kapitel~\ref{sec:evaluation} herangezogen.
+
+\subsubsection{Iteration 1: Baseline}
+\label{subsubsec:iteration1}
+
+Die erste Iteration übernimmt unverändert die in Kapitel~\ref{sec:konzeption} festgelegte Architektur (\gls{LSTM} 128-64-256-128, 650.369 Parameter) sowie \gls{Adam} als Optimierer und Smooth-L1 ($\beta = 0{,}1$) als Verlustfunktion, ergänzt um plausible Standardwerte für die dort bewusst offen gelassenen Trainings-Hyperparameter. \autoref{tab:iteration1_config} fasst die übrigen, in dieser Iteration konfigurierten Hyperparameter zusammen.
+
+\begin{table}[h]
+    \centering
+    \small
+    \caption[Hyperparameter der Baseline-Iteration]{Trainings-Hyperparameter der Baseline-Iteration (Iteration~1).}
+    \label{tab:iteration1_config}
+    \begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} p{7.5cm} p{7.5cm}}
+        \toprule
+        \textbf{Parameter} & \textbf{Wert} \\
+        \midrule
+        Lernrate                 & $10^{-4}$ \\
+        LR-Scheduler             & ReduceLROnPlateau \\
+        LR-Faktor                & 0{,}5 \\
+        LR-Patience              & 5 \\
+        LR-Min-LR                & $10^{-6}$ \\
+        Dropout-Rate             & 0{,}45 \\
+        Weight Decay             & $10^{-4}$ \\
+        Gradient Clipping        & 1{,}0 \\
+        Batch-Size               & 2048 \\
+        Epochen (max.)           & 50 \\
+        Early-Stop-Patience      & 10 \\
+        \bottomrule
+    \end{tabular*}
+\end{table}
+
+Trainiert wird auf dem vollständigen Trainingssplit mit 757 Trips beziehungsweise 523.125 Fenstern; die Auswertung erfolgt auf dem ebenfalls vollständigen Validierungssplit mit 370 Trips beziehungsweise 53.276 Fenstern. Das nach Val-Loss beste Modell wurde in Epoche~17 gesichert mit einem Val-Loss von $0{,}025206$ ($R^2 = 0{,}0763$, RMSE $= 0{,}1588$, Richtungs-Accuracy $= 64{,}46\,\%$, Toleranz-Accuracy $= 73{,}92\,\%$). Da über die folgenden 10 Epochen -- gemäß der konfigurierten Early-Stop-Patience -- keine weitere Verbesserung mehr erzielt wurde, brach das Training regulär nach Epoche~27 ab.
+
+\autoref{fig:iteration1_losskurven} zeigt den Verlauf von Trainings- und Validierungs-Loss über die 27 trainierten Epochen. Der Trainings-Loss fällt durchgehend glatt und monoton von rund $0{,}080$ auf rund $0{,}063$. Der Validierungs-Loss verläuft deutlich unruhiger: Nach einem anfänglichen Anstieg auf ein Maximum von rund $0{,}0274$ in Epoche~3 fällt er mit starken Schwankungen ab und erreicht sein Minimum bei rund $0{,}0252$ in Epoche~17. In den folgenden Epochen pendelt er wiederholt zwischen etwa $0{,}0252$ und $0{,}0260$, ohne dieses Minimum nochmals zu unterbieten.
+
+Dieses Pendeln löst schließlich den Early-Stopping-Mechanismus aus. Zudem ist der Trainings-Loss zum Zeitpunkt des Abbruchs erkennbar noch nicht vollständig konvergiert, während die ausgeprägte Schwankungsbreite des Validierungs-Loss bereits in dieser vergleichsweise frühen Trainingsphase darauf hindeutet, dass das Modell empfindlich auf die exakten Eingabewerte einzelner Batches reagiert.
+
+\begin{figure}[h]
+    \centering
+    \begin{minipage}{0.495\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{base_train_loss.png}
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.495\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{base_val_loss.png}
+    \end{minipage}
+    \caption[Trainings- und Validierungs-Loss der Baseline-Iteration]{Trainings-Loss (links, Smooth-L1) und Validierungs-Loss (rechts, MSE) der Baseline-Iteration bis zum Abbruch durch Early Stopping nach Epoche~27. Der Validierungs-Loss erreicht sein Minimum bereits in Epoche~17 und schwankt danach ohne weitere Verbesserung.}
+    \label{fig:iteration1_losskurven}
+\end{figure}
+
+Aus dieser Analyse ergeben sich für die nächste Iteration folgende konkrete Anpassungen:
+
+\begin{itemize}
+    \item \textbf{Rauschen auf den Eingangsdaten:} Um die beobachtete Empfindlichkeit des Validierungs-Loss gegenüber kleinen Schwankungen zu verringern, wird während des Trainings ein leichtes, additives gaußverteiltes Rauschen auf die bereits $z$-standardisierten Eingangsfeatures aufgebracht. Da das Modell dadurch gezwungen wird, robustere statt exakter, einzelfallbezogener Muster zu erlernen, soll dies zu einem glatteren, weniger stark oszillierenden Verlauf des Validierungs-Loss führen.
+    \item \textbf{Explizite Gewichtsinitialisierung:} Bislang erfolgt die Initialisierung ausschließlich über die PyTorch-Standardinitialisierung. Für Iteration~2 wird stattdessen eine Xavier/Glorot-Initialisierung für sämtliche \gls{LSTM}- und linearen Gewichtsmatrizen eingeführt, ergänzt um einen auf 1{,}0 gesetzten Forget-Gate-Bias, um dem Netz zu Trainingsbeginn ein stärkeres Beibehalten vergangener Zustände nahezulegen und einen stabileren Trainingsstart zu ermöglichen.
+\end{itemize}
+
+\subsubsection{Iteration 2: Rauschen und Gewichtsinitialisierung}
+\label{subsubsec:iteration2}
+
+Iteration~2 übernimmt Architektur, Optimierer und Verlustfunktion unverändert aus Iteration~1 und setzt die am Ende von Abschnitt~\ref{subsubsec:iteration1} vorgeschlagenen Anpassungen um. \autoref{tab:iteration2_config} zeigt die resultierende Konfiguration; gegenüber \autoref{tab:iteration1_config} sind die Gewichtsinitialisierung und das Eingangsrauschen neu hinzugekommen, alle übrigen Parameter bleiben unverändert.
+
+\begin{table}[h]
+    \centering
+    \small
+    \caption[Hyperparameter der Iteration 2]{Trainings-Hyperparameter der Iteration~2.}
+    \label{tab:iteration2_config}
+    \begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} p{7.5cm} p{7.5cm}}
+        \toprule
+        \textbf{Parameter} & \textbf{Wert} \\
+        \midrule
+        Lernrate                 & $10^{-4}$ \\
+        LR-Scheduler             & ReduceLROnPlateau \\
+        LR-Faktor                & 0{,}5 \\
+        LR-Patience              & 5 \\
+        LR-Min-LR                & $10^{-6}$ \\
+        Gewichtsinitialisierung  & Xavier-Uniform (LSTM/Linear), Forget-Gate-Bias $= 1{,}0$ \\
+        Dropout-Rate             & 0{,}45 \\
+        Weight Decay             & $10^{-4}$ \\
+        Eingangsrauschen (Std.)  & 0{,}03 (nur Training) \\
+        Gradient Clipping        & 1{,}0 \\
+        Batch-Size               & 2048 \\
+        Epochen (max.)           & 50 \\
+        Early-Stop-Patience      & 10 \\
+        \bottomrule
+    \end{tabular*}
+\end{table}
+
+Das nach Val-Loss beste Modell wurde bereits in Epoche~7 gesichert mit einem Val-Loss von $0{,}025201$ ($R^2 = 0{,}0765$, RMSE $= 0{,}1587$, MAE $= 0{,}0885$, Richtungs-Accuracy $= 63{,}63\,\%$, Toleranz-Accuracy $= 73{,}96\,\%$). Da über die folgenden 10 Epochen keine weitere Verbesserung mehr erzielt wurde, brach das Training nach Epoche~17 ab. Im direkten Vergleich zu Iteration~1 fällt der Val-Loss damit nur minimal von $0{,}025206$ auf $0{,}025201$ -- eine Verbesserung, die praktisch im Rauschen der Messung liegt. Auffällig ist jedoch, dass dieses beste Ergebnis nun bereits nach 7 statt nach 17 Epochen erreicht wird: Die Xavier-Initialisierung beschleunigt die Konvergenz spürbar, ohne die letztlich erreichbare Modellgüte zu verändern.
+
+\autoref{fig:iteration2_losskurven} zeigt den Verlauf von Trainings- und Validierungs-Loss über die 17 trainierten Epochen. Der Trainings-Loss fällt von der ersten Epoche an zügig und gleichmäßig ab. Der Validierungs-Loss fällt ebenfalls von Beginn an und pendelt sich nach den ersten beiden Epochen in einem Band zwischen etwa $0{,}0252$ und $0{,}0257$ ein, unterbrochen von einem kleinen, erneuten Anstieg um Epoche~12 sowie einem leichten Aufwärtstrend gegen Ende des dargestellten Verlaufs.
+
+Im Vergleich zu Iteration~1 fällt zunächst auf, dass der dort zu Beginn sichtbare, verzögerte Start des Trainings-Loss hier ausbleibt. Auch der dort beobachtete, ausgeprägte Anstieg des Validierungs-Loss auf ein Maximum von rund $0{,}0274$ in den ersten Epochen tritt nicht mehr auf, und die Gesamtschwankungsbreite des Validierungs-Loss ist spürbar kleiner. Rauschen und Gewichtsinitialisierung dämpfen die grobe, frühe Instabilität aus Iteration~1 damit wirksam; die feinere Epoche-zu-Epoche-Unruhe des Val-Loss beseitigen sie jedoch nicht vollständig.
+
+\begin{figure}[h]
+    \centering
+    \begin{minipage}{0.495\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{noise_train_loss.png}
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.495\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{noise_val_loss.png}
+    \end{minipage}
+    \caption[Trainings- und Validierungs-Loss der Iteration 2]{Trainings-Loss (links, Smooth-L1) und Validierungs-Loss (rechts, MSE) der Iteration~2 bis zum Abbruch durch Early Stopping nach Epoche~17. Der anfängliche Ausreißer aus Iteration~1 tritt nicht mehr auf, eine feinere Restunruhe bleibt jedoch bestehen.}
+    \label{fig:iteration2_losskurven}
+\end{figure}
+
+Um diese verbleibende Unruhe weiter zu reduzieren, bietet sich als eine naheliegende Stellschraube tatsächlich die Batch-Size an: Da jeder Gradientenschritt über den Durchschnitt der Fehler innerhalb eines Batches berechnet wird, sinkt die Varianz dieser Schätzung mit wachsender Batch-Size, was tendenziell zu glatteren, weniger stark schwankenden Parameter-Updates und damit auch zu einem stabileren Verlauf des Validierungs-Loss über die Epochen hinweg führt. Für die nächste Iteration ergeben sich daraus folgende konkrete Anpassungen:
+
+\begin{itemize}
+    \item \textbf{Erhöhte Batch-Size:} Die Batch-Size wird von 2048 auf 4096 verdoppelt, um die Varianz der Gradientenschätzung je Optimierer-Schritt zu reduzieren und dadurch einen glatteren Trainingsverlauf zu erzielen.
+    \item \textbf{Erhöhte Early-Stop-Patience:} Die Early-Stop-Patience wird von 10 auf 15 Epochen angehoben. Da der Val-Loss weiterhin leicht schwankt, besteht andernfalls das Risiko, dass das Training aufgrund einer einzelnen, zufällig ungünstigen Epoche vorzeitig abbricht, bevor ein möglicherweise noch besseres, späteres Minimum gefunden wird.
+    \item \textbf{Exponential Moving Average der Modellgewichte:} Ergänzend wird ein \gls{EMA} über die Modellgewichte eingeführt, wie er in der Literatur unter dem Begriff Polyak-Averaging bekannt ist. Anstatt die Gewichte einer einzelnen, potenziell durch stochastisches Rauschen beeinflussten Epoche zu bewerten, wird dabei ein exponentiell gewichteter Mittelwert der Gewichte über mehrere Epochen hinweg mitgeführt und für die Val-Loss-Berechnung herangezogen, was die Bewertung zusätzlich gegenüber kurzfristigen Ausschlägen robuster machen soll.
+\end{itemize}
+
+\subsubsection{Iteration 3: Größere Batch-Size}
+\label{subsubsec:iteration3}
+
+Iteration~3 setzt die am Ende von Abschnitt~\ref{subsubsec:iteration2} vorgeschlagenen Anpassungen um. Die Modellauswahl sowie die Berechnung des Val-Loss erfolgen dabei konsequent auf Basis der EMA-geglätteten Gewichte anstelle der rohen, unmittelbar trainierten Gewichte. \autoref{tab:iteration3_config} zeigt die resultierende Konfiguration; gegenüber \autoref{tab:iteration2_config} ändern sich die Batch-Size und die Early-Stop-Patience, und mit dem Gewichts-EMA kommt ein weiterer Mechanismus neu hinzu.
+
+\begin{table}[h]
+    \centering
+    \caption[Hyperparameter der Iteration 3]{Trainings-Hyperparameter der Iteration~3.}
+    \label{tab:iteration3_config}
+    \begin{tabular}{ll}
+        \toprule
+        \textbf{Parameter} & \textbf{Wert} \\
+        \midrule
+        Lernrate                 & $10^{-4}$ \\
+        LR-Scheduler             & ReduceLROnPlateau \\
+        LR-Faktor                & 0{,}5 \\
+        LR-Patience              & 5 \\
+        LR-Min-LR                & $10^{-6}$ \\
+        Gewichtsinitialisierung  & Xavier-Uniform (LSTM/Linear), Forget-Gate-Bias $= 1{,}0$ \\
+        Dropout-Rate             & 0{,}45 \\
+        Weight Decay             & $10^{-4}$ \\
+        Eingangsrauschen (Std.)  & 0{,}03 (nur Training) \\
+        Gewichts-EMA             & aktiv, Decay $= 0{,}999$ \\
+        Gradient Clipping        & 1{,}0 \\
+        Batch-Size               & 4096 \\
+        Epochen (max.)           & 50 \\
+        Early-Stop-Patience      & 15 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Das nach Val-Loss beste Modell wurde in Epoche~23 gesichert mit einem Val-Loss von $0{,}025159$ ($R^2 = 0{,}0780$, RMSE $= 0{,}1586$, MAE $= 0{,}0884$, Richtungs-Accuracy $= 64{,}30\,\%$, Toleranz-Accuracy $= 74{,}51\,\%$). Damit übertrifft Iteration~3 erstmals über die gesamte Versuchsreihe hinweg sowohl Iteration~1 als auch Iteration~2 in allen fünf Metriken gleichzeitig: Der Val-Loss sinkt weiter von $0{,}025206$ über $0{,}025201$ auf nun $0{,}025159$, während $R^2$ mit $0{,}0780$ den bis dahin besten Wert der Versuchsreihe erreicht und die Toleranz-Accuracy mit $74{,}51\,\%$ sogar den höchsten Wert der gesamten fünfteiligen Reihe markiert.
+
+\autoref{fig:iteration3_losskurven} zeigt den Verlauf von Trainings- und Validierungs-Loss über die 38 trainierten Epochen. Der Trainings-Loss fällt gleichmäßig und glatt von rund $0{,}079$ auf rund $0{,}060$ ab. Der Validierungs-Loss startet auf einem höheren Niveau von rund $0{,}037$, fällt dann nahezu ohne erkennbares Rauschen kontinuierlich ab und flacht ab etwa Epoche~20 bis 25 zu einem glatten Plateau um $0{,}02515$ bis $0{,}02520$ ab.
+
+Im Vergleich zu Iteration~1 und~2 fallen sowohl der Trainings- als auch der Validierungs-Loss deutlich glatter und ohne die dort noch sichtbare Restunruhe ab; die Epoche-zu-Epoche-Unruhe des Validierungs-Loss ist praktisch vollständig verschwunden. Der höhere Startwert des Validierungs-Loss erklärt sich durch die größere Batch-Size, die zu weniger Parameter-Updates je Epoche führt. Die anschließende Glättung ist auf das Zusammenspiel dieser größeren Batch-Size -- die die Varianz der Gradientenschätzung je Update reduziert -- und insbesondere des Gewichts-EMA zurückzuführen, welches als eine Art Tiefpassfilter über die von Epoche zu Epoche natürlich schwankende Gewichtstrajektorie wirkt. Gleichzeitig zeigt sich der Nutzen der erhöhten Early-Stop-Patience: Erst durch die zusätzlichen Epochen bis zum Abbruch nach Epoche~38 konnte das spätere, bessere Minimum in Epoche~23 überhaupt gefunden werden.
+
+\begin{figure}[h]
+    \centering
+    \begin{minipage}{0.495\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{batch_train_loss.png}
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.495\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{batch_val_loss.png}
+    \end{minipage}
+    \caption[Trainings- und Validierungs-Loss der Iteration 3]{Trainings-Loss (links, Smooth-L1) und Validierungs-Loss (rechts, MSE, EMA-Gewichte) der Iteration~3 bis zum Abbruch durch Early Stopping nach Epoche~38. Der Validierungs-Loss verläuft nahezu vollständig glatt, ohne die in Iteration~1 und~2 beobachtete Epoche-zu-Epoche-Unruhe.}
+    \label{fig:iteration3_losskurven}
+\end{figure}
+
+Für die nächste Iteration ergeben sich daraus folgende konkrete Anpassungen:
+
+\begin{itemize}
+    \item \textbf{Zyklisches Dropout-Scheduling:} Anstelle einer einmalig festgelegten Dropout-Rate oder eines monoton abflachenden Verlaufs wird die Dropout-Rate periodisch oszillierend um ihren bisherigen Wert von $0{,}45$ variiert, mit einer Amplitude zwischen $0{,}30$ und $0{,}60$ und einer Zykluslänge von 10 Epochen. Dieses Vorgehen überträgt ein aus sogenannten Cyclical-Learning-Rate-Verfahren bekanntes Prinzip auf die Regularisierungsstärke: Dort wird die Lernrate periodisch zwischen einem oberen und einem unteren Wert hin- und herbewegt, anstatt sie konstant zu halten oder nur monoton zu verringern. Übertragen auf das Dropout sollen Phasen stärkerer Regularisierung das Modell wiederholt aus möglicherweise zu eng angepassten Zuständen herausdrängen, während Phasen schwächerer Regularisierung dem Modell abwechselnd Gelegenheit geben, die dabei gewonnene Robustheit in eine feinere Anpassung an die Trainingsdaten zu überführen.
+    \item \textbf{Zyklisches Noise-Scheduling:} Analog wird auch die Standardabweichung des Eingangsrauschens periodisch oszillierend um einen Mittelwert von $0{,}02$ variiert, mit einer Amplitude zwischen $0{,}00$ und $0{,}04$ und einer gegenüber dem Dropout-Zyklus doppelt so schnellen Zykluslänge von 5 Epochen.
+    \item \textbf{Reduzierte Batch-Size:} Die Batch-Size wird von 4096 auf 3072 verringert. Da die neu eingeführten Regularisierungszyklen dem Training ohnehin eine zusätzliche, kontrollierte Variabilität hinzufügen, soll die im Vergleich zu Iteration~3 wieder leicht erhöhte Gradientenvarianz je Update dazu beitragen, dass das Modell die periodisch wechselnden Regularisierungsphasen aktiver ausnutzt, anstatt von einer zu großen Batch-Size in seiner Anpassungsfähigkeit gebremst zu werden.
+    \item \textbf{Erhöhte Scheduler-Patience:} Die Patience des \texttt{ReduceLROnPlateau}-Schedulers wird von 5 auf 15 Epochen angehoben. Da der Val-Loss durch die neu eingeführten Regularisierungszyklen nun selbst periodisch schwanken dürfte, muss die Patience deutlich länger sein als die Zykluslänge des Dropout-Schedulings (10 Epochen), damit der Scheduler eine durch den Regularisierungszyklus bedingte, vorübergehende Verschlechterung nicht fälschlich als echtes Plateau interpretiert und die Lernrate vorschnell reduziert.
+    \item \textbf{Erhöhte Early-Stop-Patience:} Aus demselben Grund wird die Early-Stop-Patience von 15 auf 25 Epochen angehoben, sodass dem Training über mehrere vollständige Regularisierungszyklen hinweg Gelegenheit gegeben wird, sich zu beweisen, bevor mangels Verbesserung endgültig abgebrochen wird.
+    \item \textbf{Erhöhte maximale Epochenzahl:} Um der nun deutlich längeren Scheduler- und Early-Stop-Patience ausreichend Raum zu geben, wird die maximale Epochenzahl von 50 auf 80 erhöht.
+\end{itemize}
+
+\subsubsection{Iteration 4: Zyklische Regularisierung}
+\label{subsubsec:iteration4}
+
+Iteration~4 setzt die am Ende von Abschnitt~\ref{subsubsec:iteration3} vorgeschlagenen Anpassungen -- zyklisches Dropout- und Noise-Scheduling sowie eine reduzierte Batch-Size -- um. Gegenüber der ursprünglichen Planung wurden dabei einige Werte im finalen Trainingsskript noch feinjustiert: Die Scheduler-Patience wurde stärker als geplant erhöht, das Early Stopping wurde für diesen Lauf vollständig deaktiviert, und die maximale Epochenzahl wurde weiter angehoben, als ursprünglich vorgesehen -- das Training verlässt sich damit konsequent auf das Best-Model-Checkpointing anhand des (EMA-basierten) Val-Loss, ohne vorzeitig abzubrechen. \autoref{tab:iteration4_config} zeigt die tatsächlich verwendete Konfiguration im Detail.
+
+\begin{table}[h]
+    \centering
+    \caption{Trainings-Hyperparameter der Iteration~4.}
+    \label{tab:iteration4_config}
+    \begin{tabular}{ll}
+        \toprule
+        \textbf{Parameter} & \textbf{Wert} \\
+        \midrule
+        Lernrate                 & $10^{-4}$ \\
+        LR-Scheduler             & ReduceLROnPlateau \\
+        LR-Faktor                & 0{,}5 \\
+        LR-Patience              & 25 \\
+        LR-Min-LR                & $10^{-6}$ \\
+        Gewichtsinitialisierung  & Xavier-Uniform (LSTM/Linear), Forget-Gate-Bias $= 1{,}0$ \\
+        Dropout-Rate (zyklisch)  & $0{,}45 \pm 0{,}15$, Zyklus 10 Epochen \\
+        Eingangsrauschen (zyklisch) & $0{,}02 \pm 0{,}02$, Zyklus 5 Epochen \\
+        Weight Decay             & $10^{-4}$ \\
+        Gewichts-EMA             & aktiv, Decay $= 0{,}999$ \\
+        Gradient Clipping        & 1{,}0 \\
+        Batch-Size               & 3072 \\
+        Epochen (max.)           & 100 \\
+        Early-Stop-Patience      & 0 (deaktiviert) \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Das nach Val-Loss beste Modell wurde in Epoche~20 gesichert mit einem Val-Loss von $0{,}025148$ ($R^2 = 0{,}0784$, RMSE $= 0{,}1586$, MAE $= 0{,}0885$, Richtungs-Accuracy $= 64{,}34\,\%$, Toleranz-Accuracy $= 74{,}07\,\%$). Damit unterbietet Iteration~4 den Val-Loss aus Iteration~3 nochmals leicht ($0{,}025159 \rightarrow 0{,}025148$) und erzielt mit $R^2 = 0{,}0784$ den bislang höchsten Wert der gesamten Versuchsreihe. Bei der Toleranz-Accuracy fällt das Ergebnis mit $74{,}07\,\%$ hingegen leicht hinter das von Iteration~3 ($74{,}51\,\%$) zurück.
+
+\autoref{fig:iteration4_losskurven} zeigt den Verlauf von Trainings- und Validierungs-Loss über die vollen 100 trainierten Epochen. Der Trainings-Loss fällt insgesamt weiter ab als in den vorangegangenen Iterationen, zeigt dabei aber deutlich sichtbare, periodische Wellen. Der Validierungs-Loss fällt zunächst zügig ab und erreicht sein Minimum von rund $0{,}0251$ bereits um Epoche~15 bis 20, steigt anschließend jedoch merklich wieder an und pendelt sich ab etwa Epoche~40 auf einem höheren Plateau von rund $0{,}0258$ bis $0{,}0261$ ein, auf dem er bis zum Ende des Trainings verbleibt.
+
+Die im Trainings-Loss sichtbaren periodischen Wellen lassen sich unmittelbar auf das zyklische Dropout- und Noise-Scheduling zurückführen. Auffälliger ist jedoch, dass der in Iteration~3 durch die Kombination aus größerer Batch-Size und Gewichts-EMA erreichte, vollständig stabile Verlauf ohne späteren Wiederanstieg hier nicht mehr auftritt: Die Rückkehr zu einer kleineren Batch-Size bringt in Kombination mit dem periodisch schwankenden Regularisierungsschema einen Teil der in Iteration~3 überwundenen Instabilität zurück. Da jedoch weiterhin konsequent das Best-Model-Checkpointing greift, wirkt sich dieser spätere Wiederanstieg nicht auf das tatsächlich resultierende Modell aus -- er bedeutet lediglich, dass ein Großteil der 100 trainierten Epochen im Nachhinein keinen zusätzlichen Nutzen erbracht hat.
+
+\begin{figure}[h]
+    \centering
+    \begin{minipage}{0.495\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{dynamic_train_loss.png}
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.495\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{dynamic_val_loss.png}
+    \end{minipage}
+    \caption[Trainings- und Validierungs-Loss der Iteration 4]{Trainings-Loss (links, Smooth-L1) und Validierungs-Loss (rechts, MSE, EMA-Gewichte) der Iteration~4 über 100 Epochen. Nach einem frühen Minimum um Epoche~20 steigt der Validierungs-Loss wieder an und verbleibt ab etwa Epoche~40 auf einem höheren, leicht welligen Plateau.}
+    \label{fig:iteration4_losskurven}
+\end{figure}
+
+Die Differenz zwischen den besten Val-Loss-Werten aus Iteration~3 und Iteration~4 ist mit $0{,}025159$ gegenüber $0{,}025148$ bereits so gering, dass beide Konfigurationen als praktisch gleichwertig gelten können; der eigentliche Unterschied liegt im Verlauf nach dem jeweiligen Optimum. Für die nächste Iteration ergeben sich daraus folgende konkrete Anpassungen:
+
+\begin{itemize}
+    \item \textbf{Weiter reduzierte Batch-Size:} Die Batch-Size wird von 3072 auf 2048 weiter verringert. Da bereits der Schritt von 4096 (Iteration~3) auf 3072 (Iteration~4) die spätere Stabilität des Validierungs-Loss gegenüber Iteration~3 verschlechtert hat, wird geprüft, ob dieser Effekt bei noch kleinerer Batch-Size -- und der damit einhergehend höheren Gradientenvarianz je Update -- noch deutlicher zutage tritt, oder ob das zyklische Regularisierungsschema und das Gewichts-EMA diesem Effekt hinreichend entgegenwirken können.
+    \item \textbf{Reaktiviertes Early Stopping:} Da das beste Modell bereits sehr früh (Epoche~20) gefunden wurde und der weitaus größte Teil der 100 Epochen im Nachhinein keinen Beitrag zur Modellgüte geleistet hat, wird die Early-Stop-Patience wieder auf 30 Epochen gesetzt, um unnötige Rechenzeit einzusparen, ohne die Qualität des über das Best-Model-Checkpointing gesicherten finalen Modells zu gefährden.
+\end{itemize}
+
+\subsubsection{Iteration 5: Finales Modell}
+\label{subsubsec:iteration5}
+
+Iteration~5 setzt die am Ende von Abschnitt~\ref{subsubsec:iteration4} vorgeschlagenen Anpassungen um. \autoref{tab:iteration5_config} zeigt die finale Trainingskonfiguration; gegenüber \autoref{tab:iteration4_config} ändern sich nur die Batch-Size und die Early-Stop-Patience, alle übrigen Parameter bleiben unverändert.
+
+\begin{table}[h]
+    \centering
+    \caption{Trainings-Hyperparameter der Iteration~5 (finales Training).}
+    \label{tab:iteration5_config}
+    \begin{tabular}{ll}
+        \toprule
+        \textbf{Parameter} & \textbf{Wert} \\
+        \midrule
+        Lernrate                 & $10^{-4}$ \\
+        LR-Scheduler             & ReduceLROnPlateau \\
+        LR-Faktor                & 0{,}5 \\
+        LR-Patience              & 25 \\
+        LR-Min-LR                & $10^{-6}$ \\
+        Gewichtsinitialisierung  & Xavier-Uniform (LSTM/Linear), Forget-Gate-Bias $= 1{,}0$ \\
+        Dropout-Rate (zyklisch)  & $0{,}45 \pm 0{,}15$, Zyklus 10 Epochen \\
+        Eingangsrauschen (zyklisch) & $0{,}02 \pm 0{,}02$, Zyklus 5 Epochen \\
+        Weight Decay             & $10^{-4}$ \\
+        Gewichts-EMA             & aktiv, Decay $= 0{,}999$ \\
+        Gradient Clipping        & 1{,}0 \\
+        Batch-Size               & 2048 \\
+        Epochen (max.)           & 100 \\
+        Early-Stop-Patience      & 30 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Das nach Val-Loss beste Modell wurde in Epoche~12 gesichert mit einem Val-Loss von $0{,}025131$ ($R^2 = 0{,}0790$, RMSE $= 0{,}1585$, MAE $= 0{,}0886$, Richtungs-Accuracy $= 63{,}75\,\%$, Toleranz-Accuracy $= 74{,}32\,\%$). Da über die folgenden 30 Epochen keine weitere Verbesserung mehr erzielt wurde, brach das Training nach Epoche~42 regulär ab.
+
+\autoref{fig:iteration5_losskurven} zeigt den Verlauf von Trainings- und Validierungs-Loss über die 42 trainierten Epochen. Der Trainings-Loss fällt zügig ab, zeigt dabei weiterhin die für das zyklische Dropout- und Noise-Scheduling charakteristischen, periodischen Wellen, bleibt insgesamt aber klar abfallend bis zum Trainingsende. Der Validierungs-Loss fällt ebenfalls zügig ab und erreicht sein Minimum bereits um Epoche~10 bis 12 bei rund $0{,}0251$; anschließend verbleibt er über die restlichen 30 Epochen in einem engen Band zwischen etwa $0{,}0251$ und $0{,}0256$, mit nur einer sehr leichten, gleichmäßigen Aufwärtstendenz gegen Ende des Trainings.
+
+Im Vergleich zu Iteration~4 verläuft der Validierungs-Loss damit wieder deutlich ruhiger: Der dort beobachtete, deutliche Wiederanstieg auf ein spürbar höheres Plateau tritt hier nicht mehr auf. Die weitere Reduktion der Batch-Size auf den ursprünglichen Wert von 2048 in Kombination mit der reaktivierten Early-Stop-Patience führt also zu einem insgesamt stabileren und zugleich rechtzeitig beendeten Trainingsverlauf.
+
+\begin{figure}[h]
+    \centering
+    \begin{minipage}{0.495\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{model_final_train_loss.png}
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.495\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{model_final_val_loss.png}
+    \end{minipage}
+    \caption[Trainings- und Validierungs-Loss der Iteration 5]{Trainings-Loss (links, Smooth-L1) und Validierungs-Loss (rechts, MSE, EMA-Gewichte) der Iteration~5 bis zum Abbruch durch Early Stopping nach Epoche~42. Der Validierungs-Loss erreicht sein Minimum bereits um Epoche~10 bis 12 und bleibt danach in einem engen Band nahe diesem Wert.}
+    \label{fig:iteration5_losskurven}
+\end{figure}
+
+\subsection{Zusammenfassung des Trainings}
+\label{subsec:zusammenfassung_training}
+
+\autoref{tab:iterationen_gesamt_metriken} stellt den besten erreichten Val-Loss sowie die übrigen vier Validierungsmetriken aller fünf Iterationen abschließend gegenüber.
+
+\begin{table}[h]
+    \centering
+    \small
+    \caption[Val-Loss und übrige Validierungsmetriken im Vergleich]{Val-Loss und übrige Validierungsmetriken im Vergleich über alle fünf Iterationen.}
+    \label{tab:iterationen_gesamt_metriken}
+    \begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} crrrrrr}
+        \toprule
+        \textbf{Iter.} & \textbf{Val-Loss} & \textbf{$R^2$} & \textbf{RMSE} & \textbf{MAE} & \textbf{Richt.-Acc.} & \textbf{Tol.-Acc.} \\
+        \midrule
+        1 & 0,025206 & 0,0763 & 0,1588 & 0,0878 & 64,46\,\% & 73,92\,\% \\
+        2 & 0,025201 & 0,0765 & 0,1587 & 0,0885 & 63,63\,\% & 73,96\,\% \\
+        3 & 0,025159 & 0,0780 & 0,1586 & 0,0884 & 64,30\,\% & 74,51\,\% \\
+        4 & 0,025148 & 0,0784 & 0,1586 & 0,0885 & 64,34\,\% & 74,07\,\% \\
+        5 & 0,025131 & 0,0790 & 0,1585 & 0,0886 & 63,75\,\% & 74,32\,\% \\
+        \bottomrule
+    \end{tabular*}
+\end{table}
+
+Der Val-Loss sinkt von Iteration zu Iteration durchgehend von $0{,}025206$ auf zuletzt $0{,}025131$, und auch $R^2$ steigt in jeder Iteration weiter an. Jede der vorgenommenen Anpassungen -- Eingangsrauschen und Gewichtsinitialisierung, größere Batch-Size mit Gewichts-EMA, zyklische Regularisierung sowie die abschließende Feinjustierung von Batch-Size und Early-Stop-Patience -- hat damit einen kleinen, aber tatsächlich messbaren Beitrag zur Modellgüte geleistet.
+
+Der Vergleich der in den vorangegangenen Abschnitten gezeigten Lernkurven macht dabei deutlich, dass dieser Fortschritt nicht gleichmäßig verlief: Iteration~3 lieferte den bislang stabilsten, am wenigsten überanpassungsanfälligen Verlauf, Iteration~4 führte durch die kleinere Batch-Size vorübergehend eine spürbare Instabilität in der späten Trainingsphase wieder ein, und Iteration~5 konnte diese Instabilität durch die erneute Anpassung von Batch-Size und Early-Stop-Patience weitgehend auffangen, ohne den in Iteration~4 erzielten Fortschritt beim Val-Loss wieder zu verlieren.
+
+Rechnet man diese Verbesserung in relative Werte um, ergibt sich jedoch ein deutlich bescheideneres Bild, als es der durchgehend positive Trend zunächst vermuten lässt. Der Val-Loss sinkt um lediglich rund $0{,}3\,\%$ relativ zum Ausgangswert; der RMSE verbessert sich im selben Verhältnis um weniger als $0{,}2\,\%$. Etwas deutlicher fällt der relative Zuwachs bei $R^2$ aus, das von $0{,}0763$ auf $0{,}0790$ und damit um rund $3{,}5\,\%$ relativ ansteigt -- in absoluten Zahlen bleibt der Zuwachs mit $0{,}0027$ jedoch ebenfalls klein.
+
+Bei genauerer Betrachtung zeigt sich zudem, dass sich nicht alle fünf Metriken gleichermaßen verbessert haben. Während Val-Loss, RMSE, $R^2$ und Toleranz-Accuracy über die Iterationen hinweg tendenziell zunehmen beziehungsweise sinken, bleibt der MAE mit Werten zwischen $0{,}0878$ und $0{,}0886$ über die gesamte Versuchsreihe praktisch konstant und liegt im finalen Modell mit $0{,}0886$ sogar minimal über dem Wert der Baseline. Noch deutlicher fällt dies bei der Richtungs-Accuracy auf: Sie erreicht in Iteration~1 mit $64{,}46\,\%$ bereits den höchsten Wert der gesamten Reihe und liegt im finalen Modell aus Iteration~5 mit $63{,}75\,\%$ sogar unterhalb dieses Ausgangswerts. Die über die Iterationen erzielte Verbesserung konzentriert sich damit im Wesentlichen auf die unmittelbar über die Verlustfunktion optimierten Größen (Val-Loss, $R^2$, RMSE) sowie auf die Toleranz-Accuracy, während sich Vorzeichentreue und mittlerer absoluter Fehler kaum oder gar nicht verbessern.
+
+In der Gesamtschau bestätigt sich damit die bereits in den einzelnen Iterationen wiederholt angedeutete Einschätzung: Die in Iteration~1 gewählte Baseline-Konfiguration lag bereits sehr nahe an dem, was mit der in Kapitel~\ref{sec:konzeption} festgelegten Architektur, dem in Abschnitt~\ref{subsubsec:feature_auswahl} definierten Feature-Vektor und der zugrundeliegenden Datenbasis erreichbar ist. Die vier nachfolgenden Iterationen haben dieses Niveau nicht grundlegend übertroffen, sondern in kleinen, im Bereich weniger Zehntel- bis niedriger einstelliger Prozentpunkte liegenden Schritten leicht verfeinert. Der eigentliche, deutlicher sichtbare Mehrwert der iterativen Vorgehensweise lag -- wie in den jeweiligen Einzelanalysen ausführlich diskutiert -- weniger in einer substanziell gesteigerten Vorhersagegenauigkeit als vielmehr in einem zunehmend stabileren, besser verstandenen und kontrollierbareren Trainingsverhalten: von einem in Iteration~1 noch spürbar verrauschten, unruhigen Val-Loss-Verlauf hin zu dem in Iteration~5 erreichten, deutlich ruhigeren und gleichzeitig rechtzeitig durch Early Stopping begrenzten Training. Dass eine bereits mit plausiblen Standardeinstellungen initialisierte Baseline so nahe an das über vier weitere, gezielte Iterationen erreichte Ergebnis heranreicht, spricht dafür, dass die in Kapitel~\ref{sec:daten_preprocessing} und Kapitel~\ref{sec:konzeption} getroffenen Entscheidungen zu Feature-Auswahl, Architektur und grober Dimensionierung bereits einen wesentlichen Teil der insgesamt erzielbaren Modellgüte festgelegt haben, während die im vorliegenden Kapitel untersuchten Trainings-Hyperparameter diesen Rahmen nur noch in engen Grenzen weiter ausschöpfen konnten.
+
+Da Iteration~5 sowohl den niedrigsten Val-Loss als auch den höchsten $R^2$-Wert der gesamten Versuchsreihe erreicht und dabei einen deutlich stabileren Trainingsverlauf als die unmittelbar vorangegangene Iteration~4 aufweist, wird das in Iteration~5 gesicherte, beste Modell aus Epoche~12 als finales Modell dieser Arbeit festgelegt. Dieses Modell wird im nachfolgenden Kapitel~\ref{sec:evaluation} erstmals auf der bislang vollständig unangetasteten Testmenge evaluiert.

@@ -1,216 +1,252 @@
 \section{Theoretische Grundlagen}
+\label{sec:theoretische_grundlagen}
 
 \subsection{Grundlagen des Supervised Learning}
+\label{sec:sl_grundlagen}
 
 Beim \gls{SL} trainiert ein Algorithmus anhand eines Datensatzes, der sowohl die Eingangsmerkmale (Features) als auch die durch einen Supervisor vorgegebenen, korrekten Zielwerte (Labels) enthält \cite[vgl.~S.~104f.]{chap2_Goo16}. 
-Das primäre Ziel dieses Paradigmas ist es, eine mathematische Zuordnung von Inputs zu Outputs zu erlernen, um in der Folge für neue, ungesehene Daten präzise Vorhersagen treffen zu können \cite[vgl.~S.~3]{chap2_Mur12}.
+Das primäre Ziel dieses Konzepts ist es, eine mathematische Zuordnung von Inputs zu Outputs zu erlernen, um in der Folge für neue, ungesehene Daten präzise Vorhersagen treffen zu können \cite[vgl.~S.~3]{chap2_Mur12}.
 
-\subsubsection{Mathematische Formalisierung und Problemklassifikation}
+\subsubsection{Mathematische Formalisierung}
+\label{sec:problemklassifikation_sl}
 
-Formell lässt sich ein Datensatz für das \gls{SL} als $\mathcal{D} = \{(x_i, y_i)\}_{i=1}^N$ definieren. 
-Hierbei repräsentiert $x_i \in \mathbb{R}^d$ den $d$-dimensionalen Eingangsvektor (Feature-Vektor) und $y_i$ den entsprechenden korrekten Zielwert. 
-Das fundamentale Ziel ist es, ein durch den Parametervektor $\theta$ (Gewichte und Biases) charakterisiertes Modell $f_\theta$ so zu trainieren, dass die Vorhersage $\hat{y}_i = f_\theta(x_i)$ den tatsächlichen Werten $y_i$ möglichst nahekommt \cite[vgl.~S.~8f.]{chap2_Ter25}.
+Um das \gls{SL} formal zu beschreiben, werden zunächst die benötigten Größen eingeführt. 
+Jedes Trainingsbeispiel besteht aus einem Eingangsvektor $x_i \in \mathbb{R}^d$, der die $d$ Merkmale (Features) eines Beobachtungszeitpunkts zusammenfasst, sowie einem zugehörigen Zielwert $y_i$, der den korrekten, tatsächlich beobachteten Wert angibt. 
+Ein Datensatz mit $N$ solchen Beispielen wird als Menge von Eingangs-Ziel-Paaren $(x_i, y_i)$ aufgefasst und lässt sich damit formal darstellen als
+\begin{equation}
+    \mathcal{D} = \{(x_i, y_i)\}_{i=1}^N \, .
+    \label{eq:sl_datensatz}
+\end{equation}
+
+Das zu trainierende Modell wird mit $f_\theta$ bezeichnet, wobei der Parametervektor $\theta$ sämtliche lernbaren Gewichte und Biases des Modells zusammenfasst. 
+Für einen gegebenen Eingangsvektor $x_i$ liefert das Modell eine Vorhersage $\hat{y}_i$, die sich formal ergibt als
+\begin{equation}
+    \hat{y}_i = f_\theta(x_i) \, .
+    \label{eq:sl_vorhersage}
+\end{equation}
+Das fundamentale Ziel des Trainings besteht darin, den Parametervektor $\theta$ so anzupassen, dass die Vorhersagen $\hat{y}_i$ den tatsächlichen Zielwerten $y_i$ über den gesamten Datensatz $\mathcal{D}$ hinweg möglichst nahekommen \cite[vgl.~S.~8f.]{chap2_Ter25}.
 
 Da die in dieser Arbeit vorherzusagenden Zielvariablen -- spezifisch die Hebelstellungen für Leistung und Bremse -- kontinuierliche Werte annehmen, wird das Problem mathematisch der Regression zugeordnet. 
 Dies grenzt sich deutlich von der Klassifikation ab, bei der das Modell diskrete oder kategoriale Klassenlabels prädiziert \cite[vgl.~S.~3]{chap2_Bis06}.
 
 \subsubsection{Fehlerbewertung mittels Verlustfunktion}
 
-Um objektiv zu bewerten, wie stark die Prädiktionen des Modells von der Ground Truth abweichen, wird eine Verlustfunktion (Loss Function) $\mathcal{L}$ herangezogen. 
-Da die wahre Verteilung der Daten in der Praxis meist unbekannt ist, approximiert das Modell das optimale Risiko, indem es den Fehler auf dem vorliegenden empirischen Trainingsdatensatz minimiert. 
-Dieser Trainingsprozess wird als \gls{ERM} bezeichnet \cite[vgl.~S.~274f.]{chap2_Goo16}.
+Um objektiv zu bewerten, wie stark die Vorhersagen des Modells von den wahren Werten abweichen, wird eine Verlustfunktion (Loss Function) $\mathcal{L}$ herangezogen. 
+Eigentlich soll das Modell so trainiert werden, dass der Fehler über alle möglichen Daten hinweg minimal wird. 
+Da die wahre Verteilung der Daten in der Praxis jedoch meist unbekannt ist, lässt sich dieser Fehler nicht direkt berechnen. 
+Stattdessen wird der Fehler auf dem vorliegenden, empirischen Trainingsdatensatz minimiert, der als Stichprobe die wahre Verteilung annähern soll \cite[vgl.~S.~274f.]{chap2_Goo16}.
 
 Für Regressionsprobleme ist der \gls{MSE} die gängigste Metrik. 
-Er berechnet sich aus dem Durchschnitt der quadrierten Differenzen zwischen den prädizierten und den wahren Werten, wie in Gleichung (\ref{eq:mse}) dargestellt:
+Er berechnet sich aus dem Durchschnitt der quadrierten Differenzen zwischen den prädizierten Werten $f_\theta(x_i)$ und den wahren Werten $y_i$ über alle $N$ Trainingsbeispiele, wie in \autoref{eq:mse} dargestellt:
 
 \begin{equation} \label{eq:mse}
-\mathcal{L}_{MSE}(\theta) = \frac{1}{N} \sum_{i=1}^N \left( f_\theta(x_i) - y_i \right)^2
+\mathcal{L}(\theta) = \frac{1}{N} \sum_{i=1}^N \left( f_\theta(x_i) - y_i \right)^2
 \end{equation}
 
-Ein wissenschaftlich kritischer Aspekt des in Gleichung (\ref{eq:mse}) definierten \gls{MSE} ist seine ausgeprägte Anfälligkeit für Ausreißer. 
+Ein wissenschaftlich kritischer Aspekt des in \autoref{eq:mse} definierten \gls{MSE} ist seine ausgeprägte Anfälligkeit für Ausreißer.
 Durch die Quadrierung der Fehler erhalten große Abweichungen einen überproportional hohen Einfluss auf den berechneten Loss \cite[vgl.~S.~8]{chap2_Ter25}. 
 Für reale, teils verrauschte Sensordaten im Schienenverkehr erweist sich dies oft als problematisch. 
-Eine fundierte Alternative bieten robuste Verlustfunktionen wie der Huber-Loss. 
-Diese steigen bei großen Fehlern nur noch linear an, wodurch die Parameter-Updates vor extremen Ausreißern geschützt werden, während sie für kleine Abweichungen die vorteilhaften, glatten Optimierungseigenschaften des \gls{MSE} beibehalten \cite[vgl.~S.~11f.]{chap2_Ter25}, \cite[vgl.~S.~349f.]{chap2_Has09}.
+Eine einfache Alternative bietet der \gls{MAE}, der die absoluten statt der quadrierten Differenzen mittelt und dadurch Ausreißer deutlich schwächer gewichtet, allerdings an der Stelle des minimalen Fehlers nicht differenzierbar ist. 
+Einen Kompromiss aus beiden Eigenschaften bieten robuste Verlustfunktionen wie der Huber-Loss beziehungsweise der eng verwandte Smooth-L1-Loss. 
+Diese verhalten sich für kleine Abweichungen wie der \gls{MSE} und gehen für große Fehler in einen linearen Anstieg über, wodurch die Parameter-Updates vor extremen Ausreißern geschützt werden, während gleichzeitig die vorteilhaften, glatten Optimierungseigenschaften des \gls{MSE} im Bereich kleiner Fehler erhalten bleiben \cite[vgl.~S.~11f.]{chap2_Ter25}, \cite[vgl.~S.~349f.]{chap2_Has09}.
 
 \subsubsection{Optimierungsalgorithmen und Gradientenabstieg}
 
 Um den berechneten Fehler zu minimieren, müssen die Parameter $\theta$ des Netzes zielgerichtet angepasst werden. 
-Standardmäßig erfolgt dies durch den Gradientenabstieg (Gradient Descent). 
+Standardmäßig erfolgt dies durch den Gradientenabstieg. 
 „In jedem Schritt wird der Parametervektor entgegen der Richtung des steilsten Anstiegs -- also des Gradienten der Verlustfunktion -- aktualisiert“ \cite[S.~240]{chap2_Bis06}. 
-Die fundamentale Update-Regel ist in Gleichung (\ref{eq:gradient_descent}) definiert:
+Der Gradient $\nabla_\theta \mathcal{L}(\theta)$ gibt dabei für jeden Parameter an, in welche Richtung und wie stark eine kleine Änderung von $\theta$ den Fehler $\mathcal{L}(\theta)$ vergrößern würde. 
+Da der Fehler minimiert und nicht maximiert werden soll, wird der Parametervektor $\theta$ nicht in Richtung des Gradienten, sondern in die entgegengesetzte Richtung verschoben. 
+Wie weit dieser Schritt jeweils reicht, bestimmt der Hyperparameter $\eta > 0$, die sogenannte \gls{LR}. 
+Diese iterative Update-Regel ist in \autoref{eq:gradient_descent} definiert:
 
 \begin{equation} \label{eq:gradient_descent}
 \theta \leftarrow \theta - \eta \nabla_\theta \mathcal{L}(\theta)
 \end{equation}
 
-Der Hyperparameter $\eta > 0$ in Gleichung (\ref{eq:gradient_descent}) bezeichnet dabei die \gls{LR}, welche die Schrittweite der Parameteranpassung bestimmt. 
+Anschaulich lässt sich dieser Prozess mit dem Abstieg in einem Tal bei Nebel vergleichen: Da die gesamte Fehlerlandschaft nicht überblickt werden kann, wird an jeder Position lediglich die lokale Steigung -- der Gradient -- gemessen und ein kleiner Schritt in die steilste Richtung bergab gegangen. 
+Eine zu groß gewählte \gls{LR} $\eta$ führt dabei zu instabilen, überschießenden Schritten, während eine zu kleine \gls{LR} den Trainingsprozess unnötig verlangsamt.
+
 Um den Gradienten $\nabla_\theta \mathcal{L}(\theta)$ in tiefen neuronalen Netzen für jedes einzelne Gewicht effizient berechnen zu können, wird der Backpropagation-Algorithmus genutzt. 
 Dieser wendet die mathematische Kettenregel an, um den Fehler von der Ausgabeschicht rückwärts durch die verborgenen Schichten des gesamten Netzes zu propagieren \cite[vgl.~S.~204f.]{chap2_Goo16}.
 
-In der Praxis wird der Gradientenabstieg selten über den gesamten Datensatz gleichzeitig berechnet. 
-Stattdessen nutzt der \gls{SGD} kleine, zufällig gewählte Teilmengen, sogenannte Mini-Batches, was den Lernprozess massiv beschleunigt \cite[vgl.~S.~277]{chap2_Goo16}. 
-In modernen Deep-Learning-Anwendungen hat sich zudem der \gls{Adam}-Optimizer als Standard etabliert. 
-\gls{Adam} erweitert den klassischen \gls{SGD}, indem er dynamische, parameterspezifische Lernraten mit einem Trägheitsterm (Momentum) kombiniert, was zu einer schnelleren und deutlich robusteren Konvergenz während des Trainings führt \cite[vgl.~S.~307f.]{chap2_Goo16}.
+In der Praxis wird der Gradient selten über den gesamten Datensatz gleichzeitig berechnet, sondern auf Basis kleiner, zufällig gewählter Teilmengen, sogenannter Mini-Batches, was den Lernprozess massiv beschleunigt \cite[vgl.~S.~277]{chap2_Goo16}. 
+Darauf aufbauend wurden verschiedene adaptive Optimierungsverfahren entwickelt, die die Lernrate während des Trainings dynamisch anpassen: \gls{Adagrad} skaliert die Lernrate für jeden Parameter individuell anhand der Historie vergangener Gradienten, wodurch selten aktualisierte Parameter größere Schritte erhalten, allerdings mit der Zeit zu einer übermäßig kleinen effektiven Lernrate neigt; \gls{RMSprop} begegnet diesem Problem, indem es die Gradientenhistorie über einen gleitenden Durchschnitt gewichtet und so auch bei langem Training anpassungsfähig bleibt; \gls{Adam} kombiniert schließlich diesen adaptiven Ansatz mit einem zusätzlichen Trägheitsterm (Momentum) und hat sich dadurch als besonders schnell konvergierender und robuster Standard in modernen \gls{DL}-Anwendungen etabliert \cite[vgl.~S.~305--308]{chap2_Goo16}.
 
 \subsection{Behavior Cloning}
 
-Aufbauend auf den Prinzipien des \gls{SL} lässt sich das Erlernen von optimalen Steuerungsstrategien auf ein klassisches Regressionsproblem reduzieren. 
-In diesem Kontext fungiert das Modell als Schüler, da es darauf trainiert wird, eine Policy zu erlernen, die das Verhalten eines Experten unter der Verteilung der Trainingsdaten nachahmt und dessen Aktionen vorhersagt \cite[vgl.~S.~2f.]{chap2_Ros10}.
+Wie bereits in Abschnitt \ref{sec:problemklassifikation_sl} dargestellt, lässt sich das Erlernen von Steuerungsstrategien in dieser Arbeit als überwachte Regressionsaufgabe im Rahmen des \gls{SL} formulieren. 
+In diesem Kontext fungiert das Modell als Schüler, da es darauf trainiert wird, eine Policy zu erlernen, die das Verhalten eines Experten unter der Verteilung der Trainingsdaten nachahmt und dessen Aktionen vorhersagt \cite[vgl.~S.~2f.]{chap2_Ros10}. 
 Folglich ist „\gls{BC} [...] eine Form des \gls{SL}, die sensomotorische Policies aus offline gesammelten Daten erlernen kann. 
 Die einzigen Voraussetzungen sind Paare von sensorischen Eingangsbeobachtungen, die mit Expertenaktionen verknüpft sind“ \cite[S.~9330]{chap2_Cod19}. 
+In der aktuellen Automatisierungsforschung ist \gls{BC} entsprechend weit verbreitet: Ein Modell wird mit Beobachtungen als Eingaben und den dazugehörigen Expertenaktionen als Ausgaben trainiert, um beispielsweise eine Policy aus menschlichen Fahrdemonstrationen als überwachte Vorhersageaufgabe zu erlernen \cite[vgl.~S.~1f.]{chap2_Kar25}.
 
-In der modernen Forschung zur Automatisierung hat sich dieser Ansatz fest etabliert: 
-Das vorherrschende Paradigma ist das \gls{IL}, meist in Form von \gls{BC}, das das Erlernen von Policies als überwachte Vorhersageaufgabe unter Verwendung menschlicher Fahr-Demonstrationen formuliert \cite[vgl.~S.~1f.]{chap2_Kar25}.
-Dabei wird die grundlegende Methodik des \gls{SL} direkt übernommen: 
-Ein typischer Ansatz für das \gls{IL} besteht darin, einen Regressor zu trainieren, um das Verhalten eines Experten vorherzusagen, gegeben Trainingsdaten der angetroffenen Beobachtungen (Eingabe) und der vom Experten ausgeführten Aktionen (Ausgabe) \cite[vgl.~S.~1f.]{chap2_Ros10}.
-
-\subsubsection{Mathematische Formulierung}
+\subsubsection{Mathematische Formalisierung}
 
 Um eine reale Zugfahrt in dieses \gls{SL}-Paradigma zu überführen, muss die Steuerungsaufgabe formalisiert werden. 
-Sie lässt sich als Markov-Entscheidungsprozess ausdrücken, der aus Zuständen, Aktionen, Übergangsdynamiken der Umgebung und Belohnungen besteht. 
-Da beim \gls{BC} die zugrundeliegenden Dynamiken der Welt - wie etwa die komplexe Physik des Zuges - und exakte Belohnungsfunktionen jedoch meist unbekannt sind, verlässt man sich stattdessen auf das Lernen aus einem Datensatz von Expertendemonstrationen \cite[vgl.~S.~2]{chap2_Kar25}. 
+Sie lässt sich grundsätzlich als Markov-Entscheidungsprozess beschreiben, bei dem ein Agent in jedem Zeitschritt ausgehend von einem Zustand eine Aktion wählt, wodurch sich die Umgebung gemäß ihrer Dynamik in einen neuen Zustand überführt und der Agent dafür eine Belohnung erhält. 
+Da beim \gls{BC} jedoch weder die zugrundeliegenden Dynamiken der Welt -- wie etwa die komplexe Physik des Zuges -- noch exakte Belohnungsfunktionen bekannt sind, verlässt man sich stattdessen auf das Lernen aus einem Datensatz von Expertendemonstrationen \cite[vgl.~S.~2]{chap2_Kar25}.
 
-Die historischen Fahrdaten des Experten werden als zeitliche Sequenzen erfasst. 
-„Wir bezeichnen das Tupel, das die während einer Episode angetroffenen Zustände und Aktionen enthält, als Trajektorie $\tau_i = (s_0, a_0, \dots, s_{T_i}, a_{T_i})$“ \cite[S.~4]{chap2_Are20}. 
-Analog zu den Eingangsvektoren $x_i$ und Zielwerten $y_i$ aus Kapitel 2.1 entsprechen die Zustände $s_t$ (bzw. Beobachtungen $o_t$) den Eingangsmerkmalen und die Aktionen $a_t$ den Zielwerten. 
+Der Ablauf einer solchen Demonstration wird als Trajektorie bezeichnet. 
+Eine Trajektorie $\tau_i$ setzt sich aus der Abfolge der während einer Episode durchlaufenen Zustände $s_t$ und der dabei jeweils ausgeführten Aktionen $a_t$ zusammen, wobei $T_i$ den letzten Zeitschritt der Episode markiert. 
+Formal lässt sich dies wie in \autoref{eq:trajektorie} ausdrücken:
 
-Das zu trainierende neuronale Netz repräsentiert dabei die Fahrstrategie. 
-„Eine End-to-End-Policy wird dargestellt als $a_t \sim \pi_\theta(a \mid o_t)$, wobei $\theta$ die gelernten Parameter, $o_t$ die Eingangsbeobachtung und $a_t$ eine abstrakte Ausgabeaktion bezeichnet“ \cite[S.~2]{chap2_Kar25}.
-Das primäre Ziel während des Trainings ist es, eine Policy $\pi_\theta$ zu finden, die den Trainingsfehler (Surrogate Loss) unter der vom Experten induzierten Zustandsverteilung minimiert, sodass die vom Modell generierten Aktionen denen des menschlichen Fahrers bestmöglich entsprechen \cite[vgl.~S.~2f.]{chap2_Ros10}.
+\begin{equation} \label{eq:trajektorie}
+\tau_i = (s_0, a_0, \dots, s_{T_i}, a_{T_i})
+\end{equation}
+ 
+Analog zu den Eingangsvektoren $x_i$ und Zielwerten $y_i$ aus Kapitel 2.1 entsprechen dabei die Zustände $s_t$ beziehungsweise die daraus abgeleiteten Beobachtungen $o_t$ den Eingangsmerkmalen und die Aktionen $a_t$ den Zielwerten \cite[vgl.~S.~4]{chap2_Are20}.
 
-\subsubsection{Covariate Shift und Compounding Errors}
+Das neuronale Netz bildet die Fahrstrategie als Policy $\pi_\theta$ ab, die anhand der gelernten Parameter $\theta$ für eine gegebene Eingangsbeobachtung $o_t$ eine Aktion $a_t$ ausgibt. 
+Formal lässt sich dies wie in \autoref{eq:policy} beschreiben:
+
+\begin{equation} \label{eq:policy}
+a_t \sim \pi_\theta(a \mid o_t)
+\end{equation}
+
+Ziel des Trainings ist es, eine Policy $\pi_\theta$ zu lernen, die unter der vom Experten geprägten Zustandsverteilung möglichst ähnliche Aktionen wie der menschliche Fahrer erzeugt \cite[vgl.~S.~2f.]{chap2_Ros10}, \cite[vgl.~S.~2]{chap2_Kar25}.
+
+\subsubsection{Covariate Shift}
 \label{sec:covariate_shift}
 
-Obwohl sich \gls{BC} mathematisch als \gls{SL} formulieren lässt, birgt die Anwendung auf sequentielle Entscheidungsprozesse wie die Zugsteuerung ein fundamentales Problem. 
-Klassische statistische Lernansätze basieren auf der Annahme, dass die Trainings- und Testdaten unabhängig und identisch verteilt sind (\gls{IID}-Annahme). 
-Beim \gls{BC} wird diese Annahme jedoch systematisch gebrochen, da die Vorhersage des Lernenden zukünftige Eingangsbeobachtungen/Zustände während der Ausführung der gelernten Policy beeinflusst und damit die entscheidende \gls{IID}-Annahme verletzt \cite[vgl.~S.~1]{chap2_Ros10}.
+Klassische statistische Lernansätze gehen davon aus, dass die Trainingsdaten und die Daten, die dem Modell später im tatsächlichen Einsatz begegnen, aus derselben Verteilung stammen und sich somit statistisch nicht unterscheiden. 
+Beim \gls{BC} ist diese Annahme jedoch systematisch verletzt: Die Vorhersagen des Modells beeinflussen während der Ausführung der gelernten Policy die zukünftigen Eingangsbeobachtungen beziehungsweise Zustände, wodurch Trainings- und Einsatzverteilung auseinanderdriften \cite[vgl.~S.~1]{chap2_Ros10}. 
+Dieses Problem betrifft zwar in erster Linie den eigenständigen Einsatz einer \gls{BC}-Policy im Closed-Loop; da das in dieser Arbeit trainierte \gls{BC}-Modell jedoch als Vorinitialisierung für die anschließende \gls{RL}-Phase dient, in der die Policy ebenfalls im Closed-Loop weitertrainiert wird, ist ein Verständnis dieses Phänomens auch hier von zentraler Bedeutung.
 
-In der Trainingsphase optimiert das Modell seine Parameter lediglich auf Basis der vorgegebenen Expertentrajektorien. 
-Während des Einsatzes agieren Policies jedoch sequenziell im geschlossenen Regelkreis (Closed-Loop), wobei jede Entscheidung zukünftige Beobachtungen beeinflusst und die \gls{IID}-Annahme damit nicht mehr gilt \cite[vgl.~S.~3]{chap2_Kar25}.
-Diese Diskrepanz zwischen Trainings- und Inferenzzeit führt zum zentralen Problem des Behavior Cloning: 
+Der Grund für die verletzte Verteilungsannahme liegt im unterschiedlichen Charakter von Training und Einsatz. 
+In der Trainingsphase optimiert das Modell seine Parameter lediglich auf Basis der vorgegebenen, feststehenden Expertentrajektorien. 
+Im Einsatz agiert die Policy jedoch sequenziell im geschlossenen Regelkreis (Closed-Loop): Jede getroffene Entscheidung beeinflusst die als Nächstes beobachtete Situation, wodurch sich das Modell schrittweise von der Verteilung entfernt, auf der es trainiert wurde \cite[vgl.~S.~3]{chap2_Kar25}. 
+Diese Diskrepanz zwischen Trainings- und Einsatzzeit führt zum zentralen Problem des \gls{BC}, dem sogenannten Covariate Shift (auch Distribution Shift genannt).
 
-Covariate Shift (auch Distribution Shift genannt) bezeichnet im vorliegenden Kontext die Verteilungsverschiebung zwischen Trainings- und Einsatzphase, bei der die Eingangsverteilungen divergieren, während die bedingte Zuordnung formal unverändert bleibt: 
-$$
-P_{train}(X) \neq P_{test}(X), \qquad P_{train}(Y\mid X) = P_{test}(Y\mid X).
-$$
-Im Closed-Loop bedeutet dies, dass bereits kleine Abweichungen von der Expertentrajektorie die Policy schrittweise in Zustandsbereiche verschieben, die unter $P_{train}(X)$ kaum oder gar nicht beobachtet wurden \cite[vgl.~S.~3]{chap2_Kar25}.
+Um dieses Phänomen präzise zu fassen, wird zwischen der Verteilung der Eingabedaten und der eigentlich zu lernenden Zuordnung unterschieden. 
+Mit $P_{train}(X)$ und $P_{deploy}(X)$ werden die Verteilungen der Eingabedaten $X$ während des Trainings beziehungsweise während des späteren Einsatzes bezeichnet. 
+Mit $P_{train}(Y \mid X)$ und $P_{deploy}(Y \mid X)$ wird demgegenüber die bedingte Zuordnung von Ausgabe $Y$ zu Eingabe $X$ bezeichnet, also die eigentliche Fahrlogik, die das Modell erlernen soll. 
+Covariate Shift bedeutet nun, dass sich zwar die Eingabeverteilung zwischen Training und Einsatz verschiebt, die zugrundeliegende Zuordnung selbst davon jedoch formal unberührt bleibt, wie in \autoref{eq:covariate_shift} dargestellt:
 
-Diese Fehlerakkumulation wächst über den Zeithorizont nicht linear, sondern quadratisch an. 
-Insbesondere kann ein Klassifikator unter der vom Experten geprägten Zustandsverteilung mit Wahrscheinlichkeit $\epsilon$ einen Fehler machen und unter der von ihm selbst induzierten Verteilung über $T$ Schritte bis zu $T^2\epsilon$ Fehler akkumulieren; formal ergibt sich dieser Verlauf aus der rekursiven Fehlermultiplikation entlang der Trajektorie, da der Lernende nach einem frühen Fehler systematisch andere Beobachtungen sieht als in der Expertendemonstration \cite[vgl.~S.~1]{chap2_Ros10}.
+\begin{equation} \label{eq:covariate_shift}
+P_{train}(X) \neq P_{deploy}(X), \qquad P_{train}(Y\mid X) = P_{deploy}(Y\mid X)
+\end{equation}
 
-Wenn das Modell folglich durch eigene kleine Fehlentscheidungen in unbekannte Zustände gerät, auf die es nie trainiert wurde, ist es in der Regel nicht mehr in der Lage, sich von diesen Fehlern zu erholen (Recovery), was in der Konsequenz zum Versagen des Systems führt \cite[vgl.~S.~16ff.]{chap2_Are20}. 
-Um dem Covariate Shift entgegenzuwirken und die Generalisierungsfähigkeit zu gewährleisten, ist der Einsatz strikter Regularisierungstechniken methodisch unumgänglich.
+Im Closed-Loop bedeutet dies konkret, dass bereits kleine Abweichungen von der Expertentrajektorie die Policy schrittweise in Zustandsbereiche führen können, die im Training kaum oder gar nicht beobachtet wurden \cite[vgl.~S.~3]{chap2_Kar25}.
+
+Besonders problematisch ist dabei, dass sich ein einzelner Fehler im Closed-Loop nicht folgenlos bleibt, sondern sich über die Zeit zunehmend verstärken kann. 
+Trifft das Modell irgendwann eine leicht falsche Entscheidung, gerät es dadurch in eine Situation, die von der ursprünglichen Expertenverteilung bereits etwas abweicht. 
+Da diese neue Situation im Training kaum vorkam, steigt die Wahrscheinlichkeit für einen weiteren Fehler an dieser Stelle, was die Policy noch weiter von den bekannten Zuständen entfernt \cite[vgl.~S.~1]{chap2_Ros10}. 
+Auf diese Weise können sich einzelne, zunächst kleine Fehler mit der Zeit zu einer immer stärkeren Abweichung von der gewünschten Fahrstrategie aufschaukeln. 
+Gerät das Modell durch eigene kleine Fehlentscheidungen folglich in unbekannte Zustände, auf die es nie trainiert wurde, ist es in der Regel nicht mehr in der Lage, sich von diesen Fehlern zu erholen, was in der Konsequenz zum Versagen des Systems führt \cite[vgl.~S.~16ff.]{chap2_Are20}.
+
+Für diese Arbeit bedeutet dies konkret, dass der beschriebene Covariate Shift genau in dem Moment auftritt, in dem die vorinitialisierte Policy in die \gls{RL}-Phase übergeht und dort erstmals eigene Entscheidungen im Closed-Loop trifft. 
+Da das \gls{BC}-Modell in dieser Arbeit jedoch nie eigenständig, sondern stets nur als Ausgangspunkt für das anschließende \gls{RL}-Training eingesetzt wird, muss es die auftretenden Verteilungsverschiebungen nicht selbst kompensieren: Diese Aufgabe übernimmt die \gls{RL}-Phase, indem sie -- im Gegensatz zum \gls{BC} -- direkt aus der vom Agenten selbst besuchten Zustandsverteilung lernt und so auch Fehler korrigieren kann, die außerhalb der ursprünglichen Trainingsverteilung liegen. 
+Das Verständnis des Covariate Shift liefert damit die zentrale Begründung dafür, warum \gls{BC} in dieser Arbeit ausschließlich als Vorinitialisierung und nicht als alleinige Lösung für die Steuerungsaufgabe eingesetzt wird.
 
 \subsection{Geeignete Modellarchitekturen}
+\label{sec:modellarchitekturen}
 
-Nachdem im vorangegangenen Kapitel das Behavior Cloning mathematisch formalisiert und die zentrale Problematik des Covariate Shifts dargelegt wurde, bedarf es nun der Auswahl einer geeigneten Modellarchitektur. 
-Das Ziel dieses Kapitels ist es, theoretisch fundierte Kandidaten für die Policy $\pi_\theta$ vorzustellen. 
-Da die Steuerung eines Zuges eine hochgradig sequenzielle Aufgabe darstellt, in der aktuelle physikalische Zustände stark von vergangenen Aktionen abhängen, werden verschiedene Netzarchitekturen primär hinsichtlich ihrer Fähigkeit evaluiert, derartige zeitliche Abhängigkeiten zu verarbeiten. 
-Die finale Auswahl der Architektur für diese Arbeit erfolgt jedoch nicht an dieser Stelle, sondern im weiteren Verlauf auf Basis empirischer Leistungsvergleiche in einer initialen Trainingsphase.
+Nachdem im vorangegangenen Kapitel das \gls{BC} mathematisch formalisiert und die zentrale Problematik des Covariate Shifts dargelegt wurde, werden im Folgenden verschiedene Modelltypen vorgestellt, die grundsätzlich als Architektur für die Policy $\pi_\theta$ infrage kommen. 
+Da die Steuerung eines Zuges eine hochgradig sequenzielle Aufgabe darstellt, in der aktuelle physikalische Zustände stark von vergangenen Aktionen abhängen, werden diese Netzarchitekturen primär hinsichtlich ihrer Fähigkeit vorgestellt, derartige zeitliche Abhängigkeiten zu verarbeiten. 
+Die finale Auswahl der für diese Arbeit verwendeten Architektur erfolgt an dieser Stelle noch nicht, sondern im weiteren Verlauf in Abschnitt \ref{subsec:architekturauswahl} auf Basis empirischer Leistungsvergleiche in einer initialen Trainingsphase.
 
-\subsubsection{Multi-Layer Perceptrons}
+\subsubsection{Multi-Layer Perceptron}
+\label{subsec:mlp}
 
-Die einfachste Form künstlicher neuronaler Netze stellen \gls{MLP} dar, welche zur Klasse der klassischen Feedforward-Netzwerke gehören (siehe Abbildung \ref{fig:mlp}). 
-In dieser Architektur wird der Input $x_t$ über Gewichte direkt und ohne Umwege auf den Output prädiziert. 
-Diese Modelle werden als Feedforward bezeichnet, da die Informationen durch die auszuwertende Funktion von x über die Zwischenberechnungen zur Definition von f und schließlich zur Ausgabe y fließen; Feedback-Verbindungen gibt es dabei nicht \cite[vgl.~S.~168]{chap2_Goo16}. 
+Die einfachste Form künstlicher neuronaler Netze stellen \gls{MLP} dar, welche zur Klasse der klassischen Feedforward-Netzwerke gehören. 
+Bei diesen Modellen fließen die Informationen ausschließlich vorwärts: von der Eingabe über die verborgenen Zwischenschritte des Modells bis hin zur Ausgabe, ohne dass es dabei Rückkopplungen gibt, bei denen eine spätere Ausgabe erneut als Eingabe für einen früheren Verarbeitungsschritt dienen würde \cite[vgl.~S.~168]{chap2_Goo16}. 
+Da Feedforward-Netzwerke Eingabedaten folglich streng direktional verarbeiten und dabei keinen internen Zustand oder ein Gedächtnis aufbauen, mappen sie Eingaben lediglich statisch auf Ausgaben; Sequenzinformationen können von \glspl{MLP} nicht gelernt werden und der zeitliche Kontext geht dabei verloren \cite[vgl.~S.~3]{chap2_Ife23}.
 
-Feedforward-Netzwerke verarbeiten Eingabedaten streng direktional. 
-Da sie folglich keinen internen Zustand oder ein Gedächtnis aufbauen können, mappen sie Eingaben lediglich statisch auf Ausgaben. 
-\glspl{MLP} können nicht aus Sequenzinformationen von Daten lernen; der Kontext geht dabei verloren \cite[vgl.~S.~3]{chap2_Ife23}.
-
-Für die Modellierung von Fahrverhalten ist diese fundamentale Amnesie kritisch. 
-Zwar punkten \gls{MLP} durch eine sehr einfache Architektur, schnelles Training und leichte Implementierbarkeit, jedoch fehlt ihnen jeglicher temporale Kontext. 
-Im Gegensatz zu rekurrenten Netzen kann ein \gls{MLP} die physikalisch relevante Trägheit des Fahrzeugsystems nicht adäquat erfassen. 
-Bei einer Siemens-Vectron-Lokomotive (Alleinfahrer, Eigenmasse etwa 80--90\,t) liegen die charakteristischen Ansprech- und Systemzeitkonstanten der Aktorik und Kinematik im Bereich von ungefähr $\tau \approx 1{,}0\,\text{s}$ bis $2{,}0\,\text{s}$; die beobachtbare Beschleunigungsänderung reagiert typischerweise mit Verzögerungen in der Größenordnung von etwa $1{,}0\,\text{s}$ bis $3{,}0\,\text{s}$. 
-Ein einzelner Snapshot $s_t$ enthält damit nicht die vollständige, für die Aktion kausale Zustandshistorie, sodass die Entscheidungsaufgabe effektiv partiell beobachtbar wird. 
-Ein \gls{MLP} besitzt keinen inhärenten Zustandsspeicher über die Zeit. Zwar kann in der Praxis ein Sliding-Window aus mehreren vergangenen Zeitschritten als flacher Eingabevektor übergeben werden, der zeitliche Kontext muss dabei jedoch explizit in den Features kodiert werden und wird nicht intern rekurrent über längere Horizonte fortgeschrieben. 
-Für eine stabile Aktionszuordnung ist daher die Aggregation eines historischen Fensters von mindestens etwa $T_{\text{window}} \approx 2\,\text{s}$ erforderlich, was sequenzbasierte beziehungsweise rekurrente Architekturen (z.\,B. \glspl{LSTM} oder zeitliche Faltungsmodelle) strukturell deutlich besser leisten. 
-Beim \gls{BC} führt dieses fehlende Verständnis für zeitliche Kausalitäten systembedingt zu einem unruhigen, zitternden Fahrverhalten, dem sogenannten Chattering.
+\autoref{fig:mlp} veranschaulicht diesen direktionalen Aufbau schematisch. 
+Die Eingabemerkmale $x_1, x_2, x_3, \dots$ bilden dabei die Input Layer und entsprechen den zuvor eingeführten Feature-Werten eines Zeitschritts. 
+Jedes dieser Eingabemerkmale ist über gewichtete Verbindungen mit sämtlichen Neuronen der Hidden Layer verknüpft, in der die eigentliche, nichtlineare Verarbeitung der Information stattfindet. 
+Die Aktivierungen der Hidden Layer werden anschließend erneut über gewichtete Verbindungen zur Output Layer weitergeleitet, die abschließend die Vorhersage $y$ ausgibt. 
+Charakteristisch ist dabei, dass der Informationsfluss ausschließlich in eine Richtung -- von der Input- über die Hidden- bis zur Output Layer -- verläuft und keinerlei rückgekoppelte Verbindungen zwischen den Schichten existieren.
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=0.8\textwidth]{MLP.png}
-    \caption[MLP-Architektur]{Schematische Darstellung eines \gls{MLP} mit direktionalem Informationsfluss ohne rekurrente Rückkopplungen \cite{MLP}.}
+    \includegraphics[width=\textwidth]{MLP.png}
+    \caption[Schematische Darstellung eines MLP]{Schematische Darstellung eines \gls{MLP} mit einer Input Layer, einer vollständig verbundenen Hidden Layer und einer Output Layer; die Eingabemerkmale $x_1, x_2, x_3, \dots$ werden dabei ausschließlich vorwärtsgerichtet, ohne rekurrente Rückkopplungen, auf die Vorhersage $y$ abgebildet.}
     \label{fig:mlp}
 \end{figure}
 
-\subsubsection{Recurrent Neural Networks}
+Für die Modellierung von Fahrverhalten ist diese fehlende Gedächtnisfähigkeit kritisch. 
+Zwar punkten \gls{MLP} durch eine sehr einfache Architektur, schnelles Training und leichte Implementierbarkeit, jedoch fehlt ihnen jeglicher temporale Kontext. 
+Im Gegensatz zu rekurrenten Netzen kann ein \gls{MLP} die physikalisch relevante Trägheit des Fahrzeugsystems nicht adäquat erfassen. 
+Züge weisen aufgrund ihrer hohen Masse und ihrer fahrdynamischen Eigenschaften eine ausgeprägte Trägheit auf. Änderungen an Leistung oder Bremse wirken sich daher nicht unmittelbar, sondern zeitlich verzögert auf das Bewegungsverhalten aus. 
+Ein einzelner Snapshot $s_t$ enthält damit nicht die vollständige, für die Aktion kausale Zustandshistorie, sodass die Entscheidungsaufgabe effektiv partiell beobachtbar wird. 
+Ein \gls{MLP} besitzt keinen inhärenten Zustandsspeicher über die Zeit. Zwar kann in der Praxis ein Sliding-Window aus mehreren vergangenen Zeitschritten als flacher Eingabevektor übergeben werden, der zeitliche Kontext muss dabei jedoch explizit in den Features kodiert werden und wird nicht intern rekurrent über längere Horizonte fortgeschrieben. 
+Für eine stabile Aktionszuordnung ist daher die Berücksichtigung eines historischen Kontextfensters erforderlich, was sequenzbasierte beziehungsweise rekurrente Architekturen (z.\,B. \glspl{LSTM} oder zeitliche Faltungsmodelle) strukturell deutlich besser leisten. 
+Beim \gls{BC} führt dieses fehlende Verständnis für zeitliche Kausalitäten systembedingt zu einem unruhigen, zitternden Fahrverhalten, dem sogenannten Chattering.
 
-Um das Problem der fehlenden zeitlichen Kontextualisierung zu lösen, wurden \gls{RNN} entwickelt (siehe Abbildung \ref{fig:rnn}). 
-„Das rekurrente neuronale Netz wurde entwickelt, um Informationen, die im vorherigen Zeitschritt aufgetreten sind, über die rekurrente Kante - die Kante, die die verborgenen Knoten (Hidden Nodes) verbindet - an den nächsten Zeitschritt weiterzugeben“ \cite[S.~4]{chap2_Oh22}. 
+\subsubsection{Recurrent Neural Network}
 
-Durch die Einführung dieses verborgenen Zustands (Hidden State) $h_t$ hängt der Output des Modells nun nicht mehr ausschließlich vom aktuellen Input $x_t$ ab, sondern gleichermaßen vom Wissen aus der Vergangenheit $h_{t-1}$. 
-Damit sind \gls{RNN} in der Lage, Kontextinformationen aus vergangenen Zeitschritten an zukünftige weiterzugeben, was sie prinzipiell für Zeitreihendaten und die Abbildung sequenzieller Dynamiken prädestiniert und ihnen einen klaren Vorteil gegenüber \gls{MLP} verschafft.
+Um das Problem der fehlenden zeitlichen Kontextualisierung zu lösen, wurden \gls{RNN} entwickelt. 
+Ihr zentrales Merkmal ist die Weitergabe von Informationen aus vorherigen Zeitschritten über einen verborgenen Zustand (Hidden State) $h_t$ an spätere Zustände und Ausgaben \cite[vgl.~S.~4]{chap2_Oh22}. 
+Der Output des Modells hängt dadurch nicht mehr ausschließlich vom aktuellen Input $x_t$ ab, sondern gleichermaßen vom Wissen aus der Vergangenheit $h_{t-1}$, wodurch \gls{RNN} Kontextinformationen aus vergangenen Zeitschritten an zukünftige weitergeben können. 
+Dies prädestiniert sie prinzipiell für Zeitreihendaten und die Abbildung sequenzieller Dynamiken und verschafft ihnen einen klaren Vorteil gegenüber \gls{MLP}.
 
-Ein strukturelles Defizit zeigt sich jedoch beim Training über lange Sequenzen hinweg mittels Backpropagation Through Time. 
-Durch fortlaufende Matrixmultiplikationen neigen die Fehlergradienten dazu, instabil zu werden. 
-„Das Problem der verschwindenden und explodierenden Gradienten bezieht sich auf die Tatsache, dass Gradienten durch einen solchen Graphen ebenfalls skaliert werden. Verschwindende Gradienten machen es schwer zu erkennen, in welche Richtung sich die Parameter bewegen sollten [...], während explodierende Gradienten das Lernen instabil machen können“ \cite[S.~289]{chap2_Goo16}. 
-Bei langen Zugfahrten - beispielsweise wenn ein rotes Signal bereits vor drei Kilometern erkannt wurde - scheitert das einfache \gls{RNN} an diesen verschwindenden Gradienten (Vanishing Gradients). 
-Es vergisst die frühe, aber maßgebliche Information, bevor der Zug den eigentlichen Bremspunkt erreicht.
+Ein strukturelles Defizit zeigt sich jedoch beim Training über lange Sequenzen hinweg: Da der Fehler beim Training Schritt für Schritt rückwärts durch die Zeit propagiert wird, werden die zugehörigen Gradienten durch die dabei fortlaufenden Matrixmultiplikationen zunehmend instabil und können über lange Sequenzen hinweg gegen null verschwinden oder ins Unermessliche anwachsen \cite[vgl.~S.~289]{chap2_Goo16}. 
+Bei langen Zugfahrten -- beispielsweise wenn ein rotes Signal bereits vor drei Kilometern erkannt wurde -- scheitert das einfache \gls{RNN} an diesen verschwindenden Gradienten (Vanishing Gradients): Es vergisst die frühe, aber maßgebliche Information, bevor der Zug den eigentlichen Bremspunkt erreicht.
+
+\subsubsection{Long Short-Term Memory}
+
+Um die Limitierungen klassischer \gls{RNN} zu überwinden, wurden \gls{LSTM} konzipiert. 
+Sie wurden entwickelt, um das Problem verschwindender Gradienten zu entschärfen und lange Abhängigkeiten in Sequenzen besser verarbeiten zu können \cite[vgl.~S.~4]{chap2_Ife23}. 
+Sie erreichen dies durch die Erweiterung der Architektur um einen Zellzustand (Cell State) $C_t$, der als eine Art internes Langzeitgedächtnis fungiert und zusätzlich zum bereits aus dem \gls{RNN} bekannten Hidden State $h_t$ durch die Zelle weitergereicht wird. 
+Der Informationsfluss wird dabei durch drei spezialisierte Gates strukturiert: Forget Gate, Input Gate und Output Gate \cite[vgl.~S.~4]{chap2_Ife23}. 
+Das Forget Gate verwirft irrelevante Informationen der Vergangenheit, das Input Gate integriert neue, relevante Eingänge und das Output Gate steuert, welcher Teil des aktualisierten Zellzustands als Hidden State ausgegeben wird.
+
+\autoref{fig:lstm} zeigt den internen Aufbau einer solchen LSTM-Zelle. 
+Am Forget Gate wird der bisherige Zellzustand $C_{t-1}$ zunächst mit dem Ergebnis einer Sigmoid-Funktion $\sigma$ multipliziert (dargestellt durch das Symbol $\times$), die aus dem vorherigen Hidden State $h_{t-1}$ und dem aktuellen Feature-Vektor $x_t$ berechnet wird. 
+Da die Sigmoid-Funktion Werte zwischen 0 und 1 ausgibt, fungiert sie hier als Filter: Werte nahe 0 löschen den entsprechenden Anteil der Information, Werte nahe 1 lassen ihn nahezu unverändert passieren. 
+Am Input Gate wird analog über eine weitere Sigmoid-Funktion entschieden, welche neuen Informationen relevant sind, während eine tanh-Funktion parallel neue Kandidatenwerte im Bereich zwischen -1 und 1 erzeugt; beide werden ebenfalls multiplikativ verknüpft. 
+Das gefilterte Altwissen und die gefilterten neuen Informationen werden anschließend über eine Addition (dargestellt durch das Symbol $+$) zum aktualisierten Zellzustand $C_t$ zusammengeführt. 
+Am Output Gate wird schließlich der neue Zellzustand $C_t$ durch eine weitere tanh-Funktion in den Bereich zwischen -1 und 1 skaliert und mit dem Ergebnis einer dritten Sigmoid-Funktion multipliziert, wodurch der neue Hidden State $h_t$ entsteht, welcher sowohl als Ausgabe des aktuellen Zeitschritts als auch als Eingabe des nächsten Zeitschritts dient.
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=0.6\textwidth]{RNN.png}
-    \caption[RNN-Architektur]{Architektur eines \gls{RNN} mit der Rückkopplungsschleife des Hidden States über die Zeit \cite{RNN}.}
-    \label{fig:rnn}
+    \includegraphics[width=\textwidth]{LSTM.png}
+    \caption[Interner Aufbau einer LSTM-Zelle]{Interner Aufbau einer LSTM-Zelle mit Forget Gate, Input Gate und Output Gate; $\sigma$ bezeichnet die Sigmoid-Funktion, tanh die Tangens-Hyperbolicus-Funktion, $\times$ eine elementweise Multiplikation und $+$ eine elementweise Addition. Der Zellzustand $C_{t-1}$ und der Hidden State $h_{t-1}$ des vorherigen Zeitschritts werden gemeinsam mit dem aktuellen Feature-Vektor $x_t$ zum aktualisierten Zellzustand $C_t$ und Hidden State $h_t$ verarbeitet.}
+    \label{fig:lstm}
 \end{figure}
 
-\subsubsection{Long Short-Term Memory Networks}
-
-Um die Limitierungen klassischer \gls{RNN} zu überwinden, wurden \gls{LSTM} konzipiert (siehe Abbildung \ref{fig:lstm}). 
-„Die erste Entwicklung von \gls{LSTM} zielte darauf ab, die Rate des verschwindenden Gradienten zu reduzieren und \gls{RNN} für Aufgaben mit Langzeitgedächtnis effektiv zu machen“ \cite[S.~4]{chap2_Ife23}. 
-
-Sie erreichen dies durch die Erweiterung der Architektur um einen Zellzustand (Cell State) $C_t$, der als eine Art internes Langzeitgedächtnis fungiert. 
-Der Informationsfluss wird dabei mathematisch präzise durch drei spezialisierte Gates reguliert: 
-„Die Architektur von LSTM hat vier Gates: Input, Forget, Output und die Memory Cell. 
-Das Gate bestimmt, was in die Memory Cell geschrieben oder daraus gelesen werden soll, wo die Informationen aufbewahrt werden“ \cite[S.~4]{chap2_Ife23}. 
-Das Forget Gate verwirft irrelevante Informationen der Vergangenheit, das Input Gate integriert neue, relevante Eingänge und das Output Gate steuert die aktuelle Ausgabe.
+Ein vollständiges LSTM-Layer besteht dabei nicht nur aus einer einzelnen Speicherzelle, sondern aus einer Vielzahl solcher Zellen, die parallel angeordnet sind und gemeinsam einen mehrdimensionalen Zellzustands- und Hidden-State-Vektor bilden -- analog dazu, wie ein Hidden Layer im \gls{MLP} aus mehreren Neuronen besteht. 
+Jede dieser Zellen verarbeitet dieselbe Eingabesequenz zum selben Zeitpunkt, verfügt jedoch über eigene, unabhängig gelernte Gate-Parameter, wodurch das Layer in der Lage ist, verschiedene zeitliche Muster gleichzeitig zu erfassen.
 
 „Sie behalten den bestehenden Hidden State bei und fügen ihm neue Inhalte hinzu. 
 Dadurch können die Fehlergradienten den Backpropagation-Prozess durchlaufen, ohne zu schnell zu verschwinden oder zu explodieren“ \cite[S.~4]{chap2_Ife23}. 
 Durch diesen additiven Mechanismus löst das \gls{LSTM} das Vanishing-Gradient-Problem. 
-Im direkten Vergleich zum Standard-\gls{RNN} ist das \gls{LSTM} bei komplexen Fahrprofilen deutlich überlegen, da es sehr langfristige Abhängigkeiten - wie weite Signaldistanzen in Kombination mit langsamer Zugphysik - verlustfrei erlernen kann. 
-Der signifikante Nachteil liegt in der Rechenintensität: Die Architektur ist durch die vielen Gates äußerst parameterstark, was das Risiko von Overfitting bei kleineren Datensätzen massiv erhöht.
+Im direkten Vergleich zum Standard-\gls{RNN} ist das \gls{LSTM} bei komplexen Fahrprofilen deutlich überlegen, da es sehr langfristige Abhängigkeiten -- wie weite Signaldistanzen in Kombination mit langsamer Zugphysik -- verlustfrei erlernen kann. 
+Der signifikante Nachteil liegt in der Rechenintensität: Die Architektur ist durch ihre drei Gates parameterstark, was das Risiko von Overfitting bei kleineren Datensätzen erhöht.
 
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=0.6\textwidth]{LSTM.png}
-    \caption[LSTM-Zellstruktur]{Aufbau einer \gls{LSTM}-Zelle mit Forget, Input und Output Gate sowie dem zentralen Cell State \cite{RNN}.}
-    \label{fig:lstm}
-\end{figure}
 
-\subsubsection{Gated Recurrent Units}
+\subsubsection{Gated Recurrent Unit}
 
-Eine modernere und stromlinienförmige Alternative zum \gls{LSTM} stellen die \gls{GRU} dar (siehe Abbildung \ref{fig:gru}). 
+Eine modernere und stromlinienförmige Alternative zum \gls{LSTM} stellen die \gls{GRU} dar. 
 Diese Architektur bietet eine recheneffizientere Variante, indem sie strukturelle Vereinfachungen vornimmt, ohne die Kernfunktionalität zu verlieren. 
 „Das \gls{GRU}-\gls{RNN} reduziert die Gating-Signale im Vergleich zum \gls{LSTM}-\gls{RNN}-Modell auf zwei. 
 Die beiden Gates werden Update-Gate und Reset-Gate genannt. 
 [...] Dies spart ein Gating-Signal und die dazugehörigen Parameter ein“ \cite[S.~2f.]{chap2_Dey17}.
 
-Durch die Verschmelzung des Forget- und Input-Gates zu einem einzigen Update-Gate und den Verzicht auf einen separaten Zellzustand kommen \gls{GRU} mit signifikant weniger Parametern aus. 
-Dies bringt entscheidende praktische Vorteile mit sich: Das Netzwerk trainiert schneller, benötigt weniger Speicher und ist - was für diese Arbeit von strategischer Bedeutung ist - weniger anfällig für Overfitting. 
+Im Gegensatz zum \gls{LSTM} verzichten \gls{GRU} vollständig auf einen separaten Zellzustand $C_t$; stattdessen wird sämtliche Information ausschließlich über den Hidden State $h_t$ weitergegeben. 
+Die drei Gates des \gls{LSTM} werden dabei auf zwei reduziert: Das Update-Gate übernimmt die kombinierte Aufgabe von Forget- und Input-Gate, indem es in einem einzigen Schritt festlegt, wie stark der bisherige Hidden State beibehalten und wie stark er durch neue Information ersetzt wird. 
+Das Reset-Gate steuert zusätzlich, wie stark der vorherige Hidden State bei der Berechnung dieser neuen Kandidateninformation überhaupt berücksichtigt wird. 
+Durch diese Verschmelzung von Forget- und Input-Gate sowie den Wegfall des separaten Zellzustands kommen \gls{GRU} mit signifikant weniger Parametern aus als \gls{LSTM}. 
+Dies bringt entscheidende praktische Vorteile mit sich: Das Netzwerk trainiert schneller, benötigt weniger Speicher und ist -- was für diese Arbeit von strategischer Bedeutung ist -- weniger anfällig für Overfitting.
 
-Trotz der Reduktion der Parameterzahl weisen \gls{GRU} bei der Analyse sequenzieller Daten eine enorme Ausdruckskraft auf. „Es wurde festgestellt, dass das \gls{GRU}-\gls{RNN} in den meisten Fällen mit dem \gls{LSTM} vergleichbar ist oder dieses sogar übertrifft“ \cite[S.~2f.]{chap2_Dey17}.
-Lediglich bei extrem komplexen, überlangen Sequenzen kann die Prädiktionsgüte minimal geringer ausfallen als beim vollen \gls{LSTM}. Ob das leichtgewichtigere \gls{GRU} oder das komplexere \gls{LSTM} für das Behavior Cloning der realen Zugdaten besser geeignet ist, muss eine empirische Evaluation der initialen Trainingsexperimente zeigen.
-
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=0.6\textwidth]{GRU.png}
-    \caption[GRU-Architektur]{Struktur einer \gls{GRU}, welche den internen Zustand mit lediglich einem Reset- und Update-Gate reguliert \cite{RNN}.}
-    \label{fig:gru}
-\end{figure}
+Trotz der Reduktion der Parameterzahl weisen \gls{GRU} bei der Analyse sequenzieller Daten eine enorme Ausdruckskraft auf. 
+„Es wurde festgestellt, dass das \gls{GRU}-\gls{RNN} in den meisten Fällen mit dem \gls{LSTM} vergleichbar ist oder dieses sogar übertrifft“ \cite[S.~2f.]{chap2_Dey17}. 
+Lediglich bei extrem komplexen, überlangen Sequenzen kann die Prädiktionsgüte minimal geringer ausfallen als beim vollen \gls{LSTM}, da der fehlende separate Zellzustand die Speicherung sehr langfristiger Abhängigkeiten etwas erschweren kann. 
+Ob das leichtgewichtigere \gls{GRU} oder das komplexere \gls{LSTM} für das \gls{BC} der realen Zugdaten besser geeignet ist, muss die empirische Evaluation der initialen Trainingsexperimente in Abschnitt \ref{subsec:architekturauswahl} zeigen.
 
 \subsection{Overfitting-Prävention}
+\label{sec:overfitting_praevention}
 
-Die Auswahl einer leistungsstarken Architektur, die zeitliche Abhängigkeiten verarbeiten kann, ist eine notwendige, jedoch keine hinreichende Bedingung für ein erfolgreiches Behavior Cloning. 
-Da das Modell in dieser Arbeit ausschließlich offline auf einem statischen Datensatz historischer Betriebsdaten trainiert wird, besteht ein immenses Risiko der Überanpassung (Overfitting). 
+Die Auswahl einer leistungsstarken Architektur, die zeitliche Abhängigkeiten verarbeiten kann, ist eine notwendige, jedoch keine hinreichende Bedingung für ein erfolgreiches \gls{BC}. 
+Da das Modell in dieser Arbeit ausschließlich auf historischen Betriebsdaten trainiert wird, besteht ein immenses Risiko der Überanpassung (Overfitting). 
 Ein Modell leidet unter Overfitting, wenn die Lücke zwischen dem Trainingsfehler und dem Testfehler zu groß wird. Dies geschieht, wenn ein Modell aufgrund einer zu hohen Modellkapazität die spezifischen Muster und das Rauschen der Trainingsdaten regelrecht auswendig lernt (Memorization), anstatt die zugrundeliegenden Gesetzmäßigkeiten zu abstrahieren. 
 Modelle mit hoher Kapazität können überanpassen, indem sie Eigenschaften des Trainingsdatensatzes auswendig lernen, die ihnen auf dem Testdatensatz nicht zugutekommen \cite[vgl.~S.~111]{chap2_Goo16}.
 Im Kontext der Zugsteuerung könnte das Netzwerk dazu tendieren, die topologischen Eigenheiten der spezifischen Trainingsstrecken starr auswendig zu lernen, anstatt eine abstrakte, physikalische und übertragbare Fahrstrategie zu generalisieren. 
 Um eine robuste Policy $\pi_\theta$ zu gewährleisten, müssen präventive Initialisierungs- und Regularisierungsstrategien angewendet werden.
 
-\subsubsection{Weight Initialization}
+\subsubsection{Gewichtsinitialisierung}
 
 Der Grundstein für ein stabiles Training und eine erfolgreiche Generalisierung wird bereits vor dem ersten Parameter-Update durch die Initialisierung der Netzgewichte $\theta$ gelegt. 
 Die bewusste und mathematisch fundierte Skalierung dieser initialen Gewichte ist kritisch für den Erfolg beim Training tiefer neuronaler Netze \cite[vgl.][S.~301ff.]{chap2_Goo16}. 
@@ -219,17 +255,21 @@ Werden die initialen Gewichte zu groß gewählt, führt dies - insbesondere bei 
 Zu große initiale Gewichte können während der Vorwärts- oder Rückwärtspropagation explodierende Werte erzeugen und die Aktivierungsfunktion saturieren, was den Gradientenverlust begünstigt \cite[vgl.~S.~301]{chap2_Goo16}. 
 Sind die Gewichte hingegen zu klein, verschwinden die Gradienten (Vanishing Gradients) und das Netzwerk lernt nicht. 
 
-Um einen vollständigen Verlust des Gradienten zu verhindern, kommen etablierte Initialisierungsstrategien wie die Xavier-Initialisierung (Glorot) oder die He-Initialisierung zum Einsatz. 
-Diese Verfahren halten die Varianz der Aktivierungen und Gradienten über die Schichten hinweg konstant. 
-Für das Training der Zug-Policy ist ein solcher stabiler Start von zentraler Bedeutung, damit das Modell nicht sofort in einem schlechten lokalen Minimum stagniert - beispielsweise in einem Zustand, in dem es pauschal stets den Bremshebel betätigt, nur um den anfänglichen Trainingsfehler (Loss) künstlich zu minimieren.
+Um einen vollständigen Verlust des Gradienten zu verhindern, kommt die Xavier-Initialisierung (Glorot) zum Einsatz. 
+Dabei werden die Gewichte einer Schicht zufällig aus einer Verteilung mit einer Varianz gezogen, die sich am Verhältnis von Eingangs- zu Ausgangsneuronen dieser Schicht orientiert, sodass die Varianz der Aktivierungen im Vorwärtsdurchlauf sowie der Gradienten im Rückwärtsdurchlauf über alle Schichten hinweg näherungsweise konstant bleibt. 
+Für das Training der Zug-Policy ist ein solcher stabiler Start von zentraler Bedeutung, damit das Modell nicht früh in einer trivialen Lösungsstrategie verharrt - beispielsweise indem es pauschal stets den Bremshebel betätigt, nur um den anfänglichen Trainingsfehler künstlich zu minimieren.
 
 \subsubsection{Regularisierungstechniken}
 
 Um die Modellkapazität während des Trainingsprozesses systematisch einzugrenzen und streckenspezifische Überanpassung zu verhindern, werden netzinterne Regularisierungsverfahren implementiert.
 
-Die $L_2$-Regularisierung, im maschinellen Lernen häufig als Weight Decay bezeichnet, wirkt einer Überanpassung entgegen, indem sie eine mathematische Bestrafung großer Netzgewichte vornimmt \cite[vgl.][S.~230f.]{chap2_Goo16}.
-Diese Regularisierungsstrategie treibt die Gewichte näher an den Ursprung, indem ein Regularisierungsterm $\Omega(\theta) = \frac{1}{2} ||w||_2^2$ zur Zielfunktion hinzugefügt wird \cite[vgl.~S.~230]{chap2_Goo16}. 
-Der klassischen Verlustfunktion, wie dem \gls{MSE}, wird demnach ein Penalty-Term hinzugefügt \cite[vgl.~S.~10]{chap2_Bis06}:
+Die $L_2$-Regularisierung, im maschinellen Lernen häufig als Weight Decay bezeichnet, wirkt einer Überanpassung entgegen, indem sie eine mathematische Bestrafung großer Netzgewichte vornimmt \cite[vgl.][S.~230f.]{chap2_Goo16}. Bezeichnet $w$ den Vektor sämtlicher trainierbarer Gewichte des Netzes, so treibt diese Regularisierungsstrategie die Gewichte näher an den Ursprung, indem der Zielfunktion ein Regularisierungsterm $\Omega(\theta)$ hinzugefügt wird, der als die halbierte, quadrierte euklidische Norm dieses Gewichtsvektors definiert ist \cite[vgl.~S.~230]{chap2_Goo16}:
+
+\begin{equation} \label{eq:omega}
+\Omega(\theta) = \frac{1}{2} ||w||_2^2
+\end{equation}
+
+Dieser Term wird über einen nichtnegativen Hyperparameter $\lambda$ gewichtet, der die Stärke der Regularisierung festlegt, und zur ursprünglichen Verlustfunktion $\mathcal{L}_{MSE}(\theta)$ addiert; die Summe läuft dabei über sämtliche einzelnen Gewichte $w_i$ des Netzes, also über die einzelnen Komponenten des Gewichtsvektors $w$. Dem klassischen Verlustterm, wie dem \gls{MSE}, wird demnach folgender Penalty-Term hinzugefügt \cite[vgl.~S.~10]{chap2_Bis06}:
 
 \begin{equation} \label{eq:L2}
 \mathcal{L}_{total}(\theta) = \mathcal{L}_{MSE}(\theta) + \frac{\lambda}{2} \sum w_i^2
@@ -241,9 +281,18 @@ Weight Decay zwingt das Modell, seine Entscheidungen - wie etwa die Wahl des opt
 
 Ergänzend zum Weight Decay kommt das Dropout-Verfahren als recheneffiziente Regularisierungsmethode zum Einsatz. 
 Der Mechanismus greift direkt in die Netzstruktur ein: „Jedes Mal, wenn wir ein Beispiel in einen Minibatch laden, sampeln wir zufällig eine andere binäre Maske, die auf alle Eingabe- und verborgenen Einheiten im Netzwerk angewendet wird“ \cite[S.~258]{chap2_Goo16}. 
-Während des Trainings wird in jedem Forward-Pass zufällig ein bestimmter Anteil (beispielsweise $p=0.2$) der Neuronen abgeschaltet, indem deren Ausgabe auf null gesetzt wird.
+Während des Trainings wird in jedem Forward-Pass ein bestimmter, über die Dropout-Rate festgelegter Anteil der Neuronen abgeschaltet, indem deren Ausgabe auf null gesetzt wird -- beispielsweise ein Fünftel aller Neuronen einer Schicht.
 
 Durch dieses stochastische Vorgehen wird verhindert, dass sich Neuronen zu stark aneinander anpassen, was als Vermeidung von Co-Adaption bezeichnet wird. 
 Das Netz darf sich nicht darauf verlassen, dass ein bestimmtes Neuron immer die perfekte Information liefert. 
 Im Endeffekt trainiert das Netzwerk somit implizit ein großes Ensemble an unterschiedlichen Teilnetzwerken \cite[vgl.~S.~258~\&~S.~266]{chap2_Goo16}. 
 Für die Zug-Policy bedeutet dies eine massive Steigerung der Robustheit gegenüber realen Sensorausfällen, Rauschen in den historischen Betriebsdaten oder unvorhergesehenen Streckenanomalien.
+
+Eine weitere, insbesondere bei kontinuierlichen Sensordaten wirksame Regularisierungstechnik besteht darin, den Netzeingaben während des Trainings gezielt Rauschen hinzuzufügen \cite[vgl.][S.~238ff.]{chap2_Goo16}. 
+Sei $x$ der ursprüngliche, bereits $z$-standardisierte Eingabevektor eines Zeitschritts, $\epsilon$ ein Störvektor, dessen Komponenten unabhängig und identisch normalverteilt sind mit Erwartungswert null und einer über den Hyperparameter $\sigma$ festgelegten Standardabweichung, und $I$ die Einheitsmatrix passender Dimension. Anstelle des unveränderten Eingabevektors $x$ erhält das Netz während jedes Trainingsschritts die gestörte Eingabe $\tilde{x}$, die sich wie folgt ergibt:
+
+\begin{equation} \label{eq:noise}
+\tilde{x} = x + \epsilon, \qquad \epsilon \sim \mathcal{N}(0, \sigma^2 I)
+\end{equation}
+
+Da sich diese Störung von Trainingsschritt zu Trainingsschritt zufällig ändert, kann sich das Netz nicht auf exakte, punktuelle Eingabewerte verlassen, sondern muss robustere, in einer kleinen Umgebung um den jeweiligen Eingabepunkt stabile Entscheidungsgrenzen erlernen. Formal lässt sich dieses Vorgehen als eine Form der Dataset Augmentation auffassen, die den effektiven Trainingsdatensatz künstlich um plausible, leicht gestörte Varianten jedes beobachteten Zustands erweitert. Für die Zug-Policy ist dies besonders relevant, da reale Sensordaten - wie bereits in Abschnitt~\ref{subsubsec:datenqualitaet} beschrieben - selbst Quantisierungseffekte und Messrauschen aufweisen; ein auf leicht gestörten Eingaben trainiertes Modell ist somit tendenziell weniger anfällig für genau diese Art von Messunsicherheiten im späteren, realen Einsatz.

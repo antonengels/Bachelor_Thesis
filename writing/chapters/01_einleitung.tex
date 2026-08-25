@@ -12,84 +12,81 @@ Folglich bedarf es intelligenterer Systeme, um Effizienz und Pünktlichkeit im d
 
 Als vielversprechende Methode für derartige Optimierungsprobleme gilt das \gls{RL}. 
 In hochkomplexen Umgebungen stößt der Standardansatz des \gls{RL} jedoch schnell an Grenzen, da die initiale Exploration sehr datenintensiv ist und die Konvergenz verlangsamt \cite[vgl.~S.~1]{chap1_Wexler22}. 
-Zur Entlastung dieser Initialphase ist die Einbindung von Expertenwissen als Vorinitialisierung erforderlich; die algorithmischen Grenzen und die Sample-Ineffizienz aktueller Ansätze werden in Kapitel 3 detailliert diskutiert.
-
-Da das Problem der Zugsteuerung von extremer Nichtlinearität und Komplexität geprägt ist, lässt sich ein ideales Modell kaum ohne die Berücksichtigung dieses Expertenwissens entwerfen \cite[vgl.~S.~4]{chap1_Zhou20}. 
-Die Umsetzung dieses Ansatzes offenbart jedoch die zentrale Daten- und Modellierungsproblematik: Obwohl historische Betriebsdaten theoretisch in großen Mengen vorliegen, lassen sich diese rohen Sensordaten nicht unmittelbar nutzen. 
+Zur Entlastung dieser Initialphase ist daher eine Vorinitialisierung mit Expertenwissen sinnvoll. 
+Gerade bei der hochgradig nichtlinearen und komplexen Zugsteuerung ist ein belastbares Modell ohne diese fachliche Vorprägung kaum realisierbar \cite[vgl.~S.~4]{chap1_Zhou20}. 
+Gleichzeitig zeigt sich dabei die zentrale Daten- und Modellierungsproblematik: Obwohl historische Betriebsdaten theoretisch vorliegen, lassen sich rohe Sensordaten nicht unmittelbar nutzen. 
 Sie sind oft verrauscht, fragmentiert und weisen komplexe zeitliche Abhängigkeiten auf, die zunächst strukturiert werden müssen \cite[vgl.~S.~5042]{chap1_Silva19}. 
 Der Versuch, Modelle ausschließlich offline mit solchen statischen Historiendaten zu initialisieren, birgt zudem das immense Risiko des Overfittings. 
 Anstatt eine universell anwendbare und abstrakte Fahrstrategie zu erlernen, tendieren die Modelle dazu, spezifische Trainingsstrecken in der Simulation auswendig zu lernen. 
 Dieses Phänomen resultiert häufig in einem sogenannten Extrapolationsfehler, der entsteht, wenn das Modell mit ungesehenen Situationen konfrontiert wird und diese fehlerhaft bewertet \cite[vgl.~S.~3]{chap1_Wexler22}.
-
 \subsection{Zielsetzung}
+\label{subsec:zielsetzung}
 
-Anknüpfend an die dargestellte Problematik der Modellinitialisierung und der mangelnden Konvergenz besteht das primäre Ziel dieser Bachelorarbeit in der Entwicklung und dem Training eines neuronalen Netzes mittels \gls{BC}, welches das Fahrverhalten menschlicher Triebfahrzeugführer auf Basis realer Betriebsdaten abbildet. 
+Anknüpfend an die dargestellte Problematik der Modellinitialisierung und der mangelnden Konvergenz besteht das primäre Ziel dieser Arbeit in der Entwicklung und dem Training eines neuronalen Netzes mittels \gls{BC}, welches das Fahrverhalten menschlicher Triebfahrzeugführer auf Basis realer Betriebsdaten abbildet. 
 Dieses Modell soll eine robuste, generalisierbare Policy erlernen. 
 Diese Strategie soll als zuverlässige Baseline für zukünftige \gls{RL}-Anwendungen im Schienenverkehr dienen und die in Abschnitt \ref{sec:problemstellung} skizzierten Initialisierungsrisiken adressieren.
 
 Aus dieser übergeordneten Zielsetzung leitet sich die folgende zentrale Forschungsfrage der Arbeit ab:
 
 \begin{center}
-    \textit{Wie lässt sich aus unstrukturierten historischen Betriebsdaten ein künstliches neuronales Netz trainieren, das eine generalisierbare Fahrstrategie für Züge erlernt?}
+    \textit{Lässt sich aus unstrukturierten historischen Betriebsdaten ein künstliches neuronales Netz trainieren, das eine generalisierbare Fahrstrategie für Züge erlernt?}
 \end{center}
 
 
 Um diese Forschungsfrage zu beantworten, wird die Arbeit in drei konkrete Teilziele gegliedert. 
-Das erste Teilziel umfasst die Datenaufbereitung und das Feature Engineering. 
+Das erste Teilziel umfasst die Datenaufbereitung und das \gls{FE}. 
 Hierbei liegt der Fokus auf der Transformation der unstrukturierten Rohdaten in eine strukturierte, für das maschinelle Lernen nutzbare Datenrepräsentation, bestehend aus definierten Fahrzuständen und den dazugehörigen Aktionen. 
 Ziel ist es, zentrale Input-Features wie beispielsweise den Streckengradienten, die Geschwindigkeit oder die Distanz zu Stoppstellen zu identifizieren, um dem Modell kausale fahrphysikalische Zusammenhänge beizubringen.
 
-Das zweite Teilziel beinhaltet die Konzeptionierung und Implementierung einer geeigneten Deep-Learning-Architektur. 
+Das zweite Teilziel beinhaltet die Konzeptionierung und Implementierung einer geeigneten \gls{DL}-Architektur. 
 Das Modell muss in der Lage sein, die komplexen, nicht-linearen Zusammenhänge zwischen den topologischen Eingangsdaten der Strecke und einer eindimensionalen kontinuierlichen Zielgröße fehlerfrei abzubilden und zu verarbeiten. 
-Der Aktionsraum ist damit explizit als $Y \in [-1, 1]$ definiert und entspricht der normierten Hebelstellung des kombinierten Fahr- und Bremshebels \texttt{M\_ATO\_RTBRq}. 
-Positive Werte ($Y > 0$) kodieren die Anforderung von Traktionsleistung beziehungsweise Beschleunigung, negative Werte ($Y < 0$) die Anforderung von Bremsleistung, und Werte nahe $0$ repräsentieren Rollen beziehungsweise Neutralstellung.
 
 Das dritte Teilziel bildet die Verhinderung von Overfitting und die Sicherstellung der Generalisierungsfähigkeit. 
 Durch die sorgfältige Auswahl und Anwendung von Regularisierungstechniken und strukturierten Validierungsstrategien muss gewährleistet werden, dass das Modell nicht auf streckenspezifische Besonderheiten überanpasst. 
-Es muss die zugrundeliegende Fahrstrategie so abstrahieren, dass das System auf vollständig ungesehenen, isolierten Fahrten (Trips) sowie über unterschiedliche Triebfahrzeugführer hinweg valide Handlungen prädizieren kann.
+Es muss die zugrundeliegende Fahrstrategie so abstrahieren, dass das System auf vollständig ungesehenen, isolierten Fahrten valide Handlungen prädizieren kann.
 
 Das erwartete Ergebnis dieser Arbeit ist ein evaluiertes Modell, dessen Prädiktionsgüte - gemessen an der Abweichung der prädizierten Hebelstellungen im direkten Vergleich zur menschlichen Referenz - auf ungesehenen Testdaten quantifiziert ist. 
 Mit diesem Artefakt soll der Machbarkeitsnachweis erbracht werden, dass sich eine robuste Fahrstrategie erfolgreich aus historischen Betriebsdaten extrahieren lässt.
 
 \subsection{Vorgehensweise}
+\label{subsec:vorgehensweise}
 
 Zur Erreichung der formulierten Zielsetzung und Beantwortung der Forschungsfrage folgt die vorliegende Arbeit einem iterativen, experimentellen Ansatz der Modellentwicklung. 
 Da maschinelles Lernen grundlegend hypothesengetrieben ist, werden die Phasen der Datenaufbereitung, des Trainings und der Evaluation in mehreren Zyklen durchlaufen, bis die Prädiktionsgüte der angestrebten Policy maximiert ist.
 
-Den Ausgangspunkt der methodischen Vorgehensweise bildet eine theoretische Fundierung in Form einer Literaturrecherche zu den Themenbereichen \gls{BC} und Regularisierungsstrategien im Deep Learning. 
+Den Ausgangspunkt der methodischen Vorgehensweise bildet eine theoretische Fundierung in Form einer Literaturrecherche zu den Themenbereichen \gls{BC} und Regularisierungsstrategien im \gls{DL}. 
 Darauf aufbauend erfolgt eine \gls{EDA} der realen Zugdaten, um systematische Muster, Rauschen und fehlende Werte frühzeitig zu identifizieren und das notwendige Datenverständnis aufzubauen.
 
-Im Anschluss wird eine deterministische Daten-Pipeline für das Preprocessing und Feature Engineering entwickelt. 
+Im Anschluss wird eine deterministische Daten-Pipeline für das Preprocessing und \gls{FE} entwickelt. 
 In diesem systematischen Umgang mit den Rohdaten werden die historischen Sensordaten bereinigt, normalisiert und in diskrete Zeitreihen-Sequenzen überführt. 
-Dabei wird der Zustandsraum, bestehend aus den definierten Input-Features, mathematisch formalisiert und der Aktionsraum, welcher die Hebelstellungen als Ausgabewerte abbildet, extrahiert.
-
-Die eigentliche iterative Modellentwicklung erfolgt anschließend unter der Verwendung des Frameworks PyTorch. 
+Dabei wird der Zustandsraum, bestehend aus den definierten Input-Features, mathematisch formalisiert und der Aktionsraum extrahiert.
+ 
 Um eine verlässliche Vergleichsbasis zu schaffen, beginnt der Programmier- und Trainingsprozess mit einer simplen Baseline-Architektur, wie beispielsweise einem einfachen Feedforward Neural Network. 
 Durch eine schrittweise Erhöhung der Modellkomplexität und ein systematisches Hyperparameter-Tuning wird die Policy im weiteren Verlauf kontinuierlich trainiert und optimiert.
 
 Um das im Vorfeld definierte Risiko des Overfittings methodisch auszuschließen, schließt sich eine strikte Evaluation und Generalisierungsprüfung an. 
 Hierfür wird eine rigorose Trennung der Daten in Trainings-, Validierungs- und Testmengen vorgenommen. 
 Da die Datenbasis aus Fahrten auf einer homogenen Güterverkehrsstrecke (Betuweroute) besteht, ist ein streckenübergreifendes Splitting empirisch nicht möglich und methodisch nicht zielführend. 
-Die Entkopplung erfolgt daher vollständig fahrtenbasiert auf Trip-Ebene: Einzelne Fahrten werden als untrennbare Zeitreihenblöcke disjunkt den Mengen Training, Validierung und Test zugewiesen. 
+Die Entkopplung erfolgt daher vollständig fahrtenbasiert: Einzelne Fahrten werden als untrennbare Zeitreihenblöcke den Mengen Training, Validierung und Test zugewiesen. 
 Dieses Trip-Level-Splitting erlaubt eine wissenschaftlich valide Generalisierungsprüfung auf ungesehenen Daten, da das Modell an vollständig isolierten Fahrten mit variierenden Fahrerprofilen evaluiert wird und zugleich Data Leakage auf Zeitschrittebene durch Autokorrelation verhindert wird. 
-Die Beurteilung der Modellleistung erfolgt anhand quantitativer Metriken, insbesondere dem \gls{MSE} zwischen der Vorhersage des Algorithmus und der tatsächlichen Handlung des menschlichen Fahrers.
+Die Beurteilung der Modellleistung erfolgt anhand quantitativer Metriken.
 
 In der abschließenden Synthese werden die experimentellen Ergebnisse interpretiert und kritisch hinterfragt. 
 Darauf basierend wird methodisch bewertet, inwiefern das finale Modell die notwendigen Voraussetzungen erfüllt, um in zukünftigen Anwendungsfällen als fundierter „Warm-Start“ für \gls{RL}-Agenten im Schienenverkehr zu fungieren.
 
 \subsection{Abgrenzung}
+\label{sec:abgrenzung}
 
-Um den Rahmen dieser Bachelorarbeit präzise zu definieren, ist eine inhaltliche und methodische Abgrenzung der Thematik erforderlich. 
-Es wird ausdrücklich darauf hingewiesen, dass das Training eines \gls{RL}-Agenten - beispielsweise mittels Algorithmen wie \gls{PPO} oder \gls{SAC} - zur aktiven Optimierung einer Reward-Funktion nicht Bestandteil dieser Untersuchung ist. 
+Um den Rahmen dieser Arbeit präzise zu definieren, ist eine inhaltliche und methodische Abgrenzung der Thematik erforderlich. 
+Es wird ausdrücklich darauf hingewiesen, dass das Training eines \gls{RL}-Agenten zur aktiven Optimierung einer Reward-Funktion nicht Bestandteil dieser Untersuchung ist. 
 Die Arbeit beschränkt sich stattdessen auf das Paradigma des \gls{SL} in Form von \gls{BC}. 
 Der Fokus liegt ausschließlich darauf, das Kaltstartproblem zukünftiger \gls{RL}-Anwendungen zu lösen, indem ein vortrainiertes neuronales Netz als initiale Ausgangsbasis bereitgestellt wird.
 
-Infolgedessen ist auch die Konzeptionierung oder vollumfängliche Implementierung eines interaktiven \gls{RL}-Loops, welcher die Interaktion zwischen Agent und Umgebung beispielsweise über ein Framework wie Gymnasium abbildet, primär nicht Teil des Kernscopes. 
-Ein rudimentärer Aufbau einer solchen Umgebung wird im Rahmen dieser Arbeit allenfalls als theoretische Vorbereitung für die Übergabe an nachfolgende Forschungsprojekte betrachtet, dient jedoch zu keinem Zeitpunkt dem eigenen Modelltraining.
+Infolgedessen ist auch die Konzeptionierung oder vollumfängliche Implementierung eines interaktiven \gls{RL}-Loops, welcher die Interaktion zwischen Agent und Umgebung beispielsweise über ein Framework wie Gymnasium abbildet, nicht Teil der Arbeit. 
 
 Darüber hinaus stützt sich die Modellbildung ausnahmslos auf das Offline-Learning mit realen, historischen Betriebsdaten. 
-Die Entwicklung eines physikalischen Zugsimulators zur detaillierten Modellierung von Einflussgrößen wie Zugkraft, Roll- oder Luftwiderstand zwecks Generierung synthetischer Daten wird konsequent ausgeschlossen.
+Die Entwicklung eines physikalischen Zugsimulators zur detaillierten Modellierung von Einflussgrößen wie Zugkraft, Roll- oder Luftwiderstand zwecks Generierung synthetischer Daten wird ausgeschlossen.
 
 Abschließend beschränkt sich die Evaluation des entwickelten Modells auf eine reine Offline-Validierung anhand zurückgehaltener Test-Datensätze. 
-Ein Deployment des Modells auf eingebetteter Hardware innerhalb eines Zuges, die Integration in reale, operative Zugleitsysteme sowie die Durchführung physischer Testfahrten sind strikt ausgeschlossen. 
+Ein Deployment des Modells auf eingebetteter Hardware innerhalb eines Zuges, die Integration in reale, operative Zugleitsysteme sowie die Durchführung physischer Testfahrten sind ausgeschlossen. 
 Ebenso bleiben harte Echtzeitanforderungen an die Inferenzzeit des Modells in der aktuellen Phase der Forschungsarbeit unberücksichtigt.
