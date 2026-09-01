@@ -46,8 +46,17 @@
     \tableofcontents
 
 
+    % Abbildungsverzeichnis
+    \phantomsection
+    \listoffigures
+    \newpage
+    
+    % Tabellenverzeichnis
+    \phantomsection
+    \listoftables
+    \newpage
+
     % Abkürzungsverzeichnis
-     % Abkürzungsverzeichnis
     \begingroup
     \setstretch{.5}
     \glsaddall
@@ -58,14 +67,9 @@
     
     \newpage
 
-    % Abbildungsverzeichnis
-    \phantomsection
-    \listoffigures
-    \newpage
-    
-    % Tabellenverzeichnis
-    \phantomsection
-    \listoftables
+    % Formelgr\"o\ss en und Einheiten
+    \input{frontmatter/indizes}
+    \setcounter{table}{0}
     \newpage
     
     % Um Konfiguration der Seitenzahl
@@ -112,7 +116,7 @@
         \refstepcounter{table}
         \label{tab:ki-nutzung}
         \vspace{0.5em}
-        \begin{tabular}{p{0.28\textwidth} p{0.62\textwidth}}
+        \begin{tabular}{>{\raggedright\arraybackslash}p{0.28\textwidth} p{0.62\textwidth}}
             \toprule
             \textbf{Hilfsmittel} & \textbf{Verwendung} \\
             \midrule

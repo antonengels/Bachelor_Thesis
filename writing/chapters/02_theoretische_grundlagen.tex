@@ -213,7 +213,7 @@ Jede dieser Zellen verarbeitet dieselbe Eingabesequenz zum selben Zeitpunkt, ver
 „Sie behalten den bestehenden Hidden State bei und fügen ihm neue Inhalte hinzu. 
 Dadurch können die Fehlergradienten den Backpropagation-Prozess durchlaufen, ohne zu schnell zu verschwinden oder zu explodieren“ \cite[S.~4]{chap2_Ife23}. 
 Durch diesen additiven Mechanismus löst das \gls{LSTM} das Vanishing-Gradient-Problem. 
-Im direkten Vergleich zum Standard-\gls{RNN} ist das \gls{LSTM} bei komplexen Fahrprofilen deutlich überlegen, da es sehr langfristige Abhängigkeiten -- wie weite Signaldistanzen in Kombination mit langsamer Zugphysik -- verlustfrei erlernen kann. 
+Im direkten Vergleich zum Standard-\gls{RNN} ist das \gls{LSTM} bei komplexen Fahrprofilen deutlich überlegen, da es sehr langfristige Abhängigkeiten -- wie weite Signaldistanzen in Kombination mit langsamer Zugphysik -- über längere Zeiträume deutlich besser erhalten und erlernen kann.
 Der signifikante Nachteil liegt in der Rechenintensität: Die Architektur ist durch ihre drei Gates parameterstark, was das Risiko von Overfitting bei kleineren Datensätzen erhöht.
 
 

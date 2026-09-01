@@ -28,7 +28,7 @@ Bereits an dieser Stelle lassen sich zwei wesentliche Einschränkungen der Daten
 \subsection{Exploratory Data Analysis}
 \label{subsec:eda}
 
-Aufbauend auf der in Abschnitt~\ref{subsec:datengrundlage} beschriebenen Datenherkunft wird im Folgenden eine explorative Analyse (\gls{EDA}) der aufbereiteten Trip-Daten durchgeführt. Die Analyse basiert auf 1{.}388 einzelnen Fahrten (Trips) aus 78 Aufzeichnungssitzungen zweier Vectron-Lokomotiven, was einem Gesamtumfang von rund 3{,}2 Millionen Zeitschritten bei einem Zeitraster von 200\,ms entspricht -- umgerechnet etwa 178 Stunden reiner Fahrzeit.
+Aufbauend auf der in Abschnitt~\ref{subsec:datengrundlage} beschriebenen Datenherkunft wird im Folgenden eine \gls{EDA} der aufbereiteten Trip-Daten durchgeführt. Die Analyse basiert auf 1{.}388 einzelnen Fahrten (Trips) aus 78 Aufzeichnungssitzungen zweier Vectron-Lokomotiven, was einem Gesamtumfang von rund 3{,}2 Millionen Zeitschritten bei einem Zeitraster von 200\,ms entspricht -- umgerechnet etwa 178 Stunden reiner Fahrzeit.
 
 Ziel dieses Unterkapitels ist es, systematische Muster, Datenlücken und Auffälligkeiten in den Daten frühzeitig zu erkennen. Darauf aufbauend werden im weiteren Verlauf der Zustands- und Aktionsraum für das Modelltraining formal festgelegt.
 \subsubsection{Datenqualität und Auffälligkeiten}
@@ -156,7 +156,7 @@ Auch die geschätzte Beschleunigung \texttt{A\_EST} ($\rho = 0{,}51$), die Dista
     \label{fig:spearman}
 \end{figure}
 
-Eine rein lineare bzw. monotone Korrelationsbetrachtung kann nichtlineare Zusammenhänge jedoch systematisch unterschätzen. Deshalb wurden die acht engineerten Features zusätzlich anhand zweier weiterer Maße bewertet: der Transinformation (\gls{MI}), die auch nichtlineare Abhängigkeiten zwischen zwei Größen erfasst, sowie dem Betrag des standardisierten Koeffizienten aus einer multivariaten Regression, der den Beitrag eines Features unter Kontrolle aller übrigen Features angibt. Zusammen mit dem Betrag der Spearman-Korrelation ergeben sich damit drei komplementäre Sichten auf dieselben Features.
+Eine rein lineare bzw. monotone Korrelationsbetrachtung kann nichtlineare Zusammenhänge jedoch systematisch unterschätzen. Deshalb wurden die acht engineerten Features zusätzlich anhand zweier weiterer Maße bewertet: der \gls{MI}, die auch nichtlineare Abhängigkeiten zwischen zwei Größen erfasst, sowie dem Betrag des standardisierten Koeffizienten aus einer multivariaten Regression, der den Beitrag eines Features unter Kontrolle aller übrigen Features angibt. Zusammen mit dem Betrag der Spearman-Korrelation ergeben sich damit drei komplementäre Sichten auf dieselben Features.
 
 \autoref{fig:engineered_importance} stellt diese drei Maße für jedes der acht engineerten Features als horizontales Balkendiagramm mit je drei Balken gegenüber. Bei \texttt{a\_est\_roll\_mean\_2s} und \texttt{a\_num} sind alle drei Balken durchweg lang. Bei anderen Features fallen die drei Maße hingegen deutlich auseinander -- etwa bei \texttt{jerk}, dessen Spearman-Balken nahezu bei null liegt, oder bei \texttt{v\_headroom} und \texttt{v\_ratio}, deren MI-Balken jeweils die längsten im gesamten Diagramm sind.
 

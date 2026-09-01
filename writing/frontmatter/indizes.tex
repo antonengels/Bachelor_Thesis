@@ -1,0 +1,58 @@
+\phantomsection
+\section*{Formelgr\"o\ss en und Einheiten}
+\addcontentsline{toc}{section}{Formelgr\"o\ss en und Einheiten}
+
+\begingroup
+\renewcommand{\arraystretch}{1.5}
+\begin{longtable}{@{} >{\raggedright\arraybackslash}p{4.0cm} >{\raggedright\arraybackslash}p{2.5cm} >{\raggedright\arraybackslash}p{9.5cm} @{}}
+        \textbf{Kurzzeichen} & \textbf{Einheit} & \textbf{Benennung} \\ \hline
+        \endfirsthead
+        \textbf{Kurzzeichen} & \textbf{Einheit} & \textbf{Benennung} \\ \hline
+        \endhead
+        $A_{\mathrm{Richt}}$ & \% & Richtungs-Accuracy \\
+        $A_{\mathrm{Tol}}$ & \% & Toleranz-Accuracy \\
+        $a_t$ & - & Aktion zum Zeitpunkt $t$ (normiert) \\
+        $C_t$ & - & Zellzustand des LSTM zum Zeitpunkt $t$ \\
+        $\mathcal{D}$ & - & Datensatz \\
+        $d$ & - & Anzahl der Eingangsmerkmale \\
+        $f_\theta$ & - & Modellfunktion \\
+        $h_t$ & - & Hidden State zum Zeitpunkt $t$ \\
+        $I$ & - & Einheitsmatrix \\
+        $\mathcal{L}(\theta)$ & - & Verlustfunktion \\
+        $\mathcal{L}_{\mathrm{MSE}}(\theta)$ & - & Mittlerer quadratischer Verlust \\
+        $\mathcal{L}_{\mathrm{total}}(\theta)$ & - & Gesamter Verlust einschlie\ss lich Regularisierung \\
+        $N$ & - & Anzahl der Datenpunkte beziehungsweise Fenster \\
+        $o_t$ & - & Beobachtung zum Zeitpunkt $t$ \\
+        $P_{\mathrm{deploy}}(X)$ & - & Eingabeverteilung w\"ahrend des Einsatzes \\
+        $P_{\mathrm{deploy}}(Y\mid X)$ & - & Bedingte Ausgabezuordnung im Einsatz \\
+        $P_{\mathrm{train}}(X)$ & - & Eingabeverteilung w\"ahrend des Trainings \\
+        $P_{\mathrm{train}}(Y\mid X)$ & - & Bedingte Ausgabezuordnung im Training \\
+        $R^2$ & - & Bestimmtheitsma\ss{} der Regression \\
+        $S$ & - & Rangsumme eines Modells \\
+        $\mathrm{Score}$ & \% & Kombinierter Validierungs-Score \\
+        $s_t$ & - & Zustand zum Zeitpunkt $t$ \\
+        $T_i$ & - & Letzter Zeitschritt beziehungsweise Episodenl\"ange \\
+        $X$ & - & Zufallsvariable der Eingabedaten \\
+        $x$ & - & Urspr\"unglicher Eingangsvektor \\
+        $x_i$ & - & Eingangsvektor eines Datenpunkts (standardisiert) \\
+        $Y$ & - & Zufallsvariable der Ausgabedaten \\
+        $y_i$ & - & Beobachteter Zielwert (normiert) \\
+        $\hat{y}_i$ & - & Vom Modell vorhergesagter Zielwert \\
+        $\beta$ & - & Schwellenwert der Smooth-L1-Verlustfunktion \\
+        $\Delta t$ & s & Zeitliche Schrittweite \\
+        $\epsilon$ & - & St\"orvektor f\"ur das Eingangsrauschen \\
+        $\eta$ & - & Lernrate \\
+        $\lambda$ & - & Gewichtungsfaktor der Regularisierung \\
+        $\nabla_\theta \mathcal{L}(\theta)$ & - & Gradient der Verlustfunktion\\
+        $\mathcal{N}(0,\sigma^2 I)$ & - & Normalverteilung des Eingangsrauschens \\
+        $\Omega(\theta)$ & - & Regularisierungsterm \\
+        $\pi_\theta$ & - & Policy des Modells \\
+        $\rho$ & - & Spearman-Rangkorrelationskoeffizient \\
+        $\sigma$ & - & Sigmoid-Funktion beziehungsweise Standardabweichung des Eingangsrauschens \\
+        $\tau_i$ & - & Trajektorie einer Demonstration \\
+        $\theta$ & - & Vektor der lernbaren Modellparameter \\
+        $\tilde{x}$ & - & Durch Rauschen gest\"orter Eingangsvektor \\
+        $w$ & - & Vektor der trainierbaren Gewichte \\
+        $w_i$ & - & Einzelnes trainierbares Gewicht \\ \hline
+    \end{longtable}
+\endgroup

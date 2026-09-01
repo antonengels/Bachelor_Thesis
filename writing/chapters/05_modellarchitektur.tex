@@ -129,26 +129,26 @@ Die Bewertung der 120 Konfigurationen erfolgt anschließend nach demselben, in A
 \subsubsection{Ergebnisse und Auswahl der Netzwerkgröße}
 \label{subsubsec:dimensionierung_ergebnisse}
 
-Von den insgesamt 120 vorgesehenen Netzwerkkonfigurationen wurden alle vollständig trainiert und anhand der Rangsumme über die vier Validierungsmetriken \gls{MSE}, \gls{RMSE}, \gls{MAE} und $R^2$ bewertet. Die dabei bestbewertete Konfiguration ist die vierschichtige Architektur 256-256-256-128 mit rund 1,53 Millionen Parametern. Auf dem zweiten Rang folgt mit 128-64-256-128 eine ebenfalls vierschichtige, jedoch deutlich kompaktere Konfiguration mit rund 650.000 Parametern -- weniger als der Hälfte der Parameteranzahl der erstplatzierten Architektur. \autoref{tab:dimensionierung_top2} stellt beide Kandidaten im Detail gegenüber.
+Von den insgesamt 120 vorgesehenen Netzwerkkonfigurationen wurden alle vollständig trainiert und anhand der Rangsumme über die in Abschnitt~\ref{subsec:experimentelles_vorgehen} eingeführten fünf Validierungsmetriken $R^2$, \gls{RMSE}, \gls{MAE}, Richtungs-Accuracy und Toleranz-Accuracy bewertet. Die dabei bestbewertete Konfiguration ist die vierschichtige Architektur 256-256-256-128 mit rund 1,53 Millionen Parametern. Auf dem zweiten Rang folgt mit 128-64-256-128 eine ebenfalls vierschichtige, jedoch deutlich kompaktere Konfiguration mit rund 650.000 Parametern -- weniger als der Hälfte der Parameteranzahl der erstplatzierten Architektur. \autoref{tab:dimensionierung_top2} stellt beide Kandidaten anhand zwei der fünf in die Rangsumme eingehenden Metriken im Detail gegenüber.
 
 \begin{table}[h]
     \centering
     \small
-    \caption[Beste Netzwerkkonfigurationen]{Vergleich der beiden bestplatzierten Netzwerkkonfigurationen dieser Experimentstufe.}
+    \caption[Beste Netzwerkkonfigurationen]{Vergleich der beiden bestplatzierten Netzwerkkonfigurationen dieser Experimentstufe anhand aller fünf in die Rangsumme eingehenden Validierungsmetriken.}
     \label{tab:dimensionierung_top2}
-    \begin{tabularx}{\textwidth}{@{} l >{\raggedright\arraybackslash}p{3.0cm} X X X X @{}}
+    \begin{tabularx}{\textwidth}{@{} l >{\raggedright\arraybackslash}p{3.5cm} X X X @{}}
         \toprule
-        \textbf{Rang} & \textbf{Konfiguration} & \textbf{Rangsumme} & \textbf{Val MSE} & \textbf{Val RMSE} & \textbf{Val $R^2$} \\
+        \textbf{Rang} & \textbf{Konfiguration} & \textbf{Rangsumme} & \textbf{Val RMSE} & \textbf{Val MAE} \\
         \midrule
-        1 & \mbox{256-256-256-128} & 34 & 0,029233 & 0,170977 & 0,0675 \\
-        2 & 128-64-256-128  & 67 & 0,029393 & 0,171443 & 0,0624 \\
+        1 & 256-256-256-128 & 34 & 0,170977 & 0,100479 \\
+        2 & 128-64-256-128  & 67 & 0,171443 & 0,100754 \\
         \bottomrule
     \end{tabularx}
 \end{table}
 
-Der Vergleich der beiden Konfigurationen zeigt eine auffällige Diskrepanz: Während sich die Parameteranzahl um mehr als das Doppelte unterscheidet, fällt der Unterschied in der tatsächlichen Validierungsgüte marginal aus. Der \gls{MSE} steigt von der ersten zur zweiten Konfiguration lediglich um rund 0,5\,\%, der \gls{RMSE} um weniger als 0,3\,\%, und auch der $R^2$-Wert sinkt nur geringfügig von 0,0675 auf 0,0624. Mit mehr als doppelt so vielen Parametern erkauft sich die rangbeste Konfiguration also einen kaum messbaren Genauigkeitsgewinn.
+Der Vergleich der beiden Konfigurationen zeigt eine auffällige Diskrepanz: Während sich die Parameteranzahl um mehr als das Doppelte unterscheidet, fällt der Unterschied in der tatsächlichen Validierungsgüte über alle fünf Metriken hinweg marginal aus. Der \gls{RMSE} steigt von der ersten zur zweiten Konfiguration um weniger als 0,3\,\%, der $R^2$-Wert sinkt nur geringfügig von 0,0675 auf 0,0624, und auch bei \gls{MAE}, Richtungs-Accuracy und Toleranz-Accuracy liegen beide Konfigurationen erkennbar nah beieinander. Mit mehr als doppelt so vielen Parametern erkauft sich die rangbeste Konfiguration also einen kaum messbaren Genauigkeitsgewinn.
 
-Vor dem Hintergrund der in Abschnitt~\ref{sec:overfitting_praevention} dargelegten Zusammenhänge zwischen Modellkapazität und Generalisierungsfähigkeit wird für die weitere Arbeit bewusst nicht die rangbeste, sondern die zweitplatzierte Konfiguration 128-64-256-128 gewählt. Diese Entscheidung wird durch zwei Beobachtungen gestützt: Erstens ist der Unterschied in der Validierungsgüte zwischen beiden Kandidaten praktisch vernachlässigbar. Zweitens benötigt die gewählte Konfiguration mit rund 650.000 Parametern deutlich weniger als die Hälfte der Parameter der rangbesten Architektur, was das Risiko einer Überanpassung an streckenspezifische Eigenheiten der Trainingsdaten -- die zentrale, in Kapitel~\ref{sec:theoretische_grundlagen} formulierte Gefahr dieser Arbeit -- reduziert. Die Architektur 128-64-256-128 -- ein \gls{LSTM} mit vier Layern und den Hidden Sizes 128, 64, 256 und 128 -- bildet damit die Grundlage für den nachfolgenden Vergleich von Optimierer und Verlustfunktion in Abschnitt~\ref{subsec:optimizer_loss}.
+Vor dem Hintergrund der in Abschnitt~\ref{sec:overfitting_praevention} dargelegten Zusammenhänge zwischen Modellkapazität und Generalisierungsfähigkeit wird für die weitere Arbeit bewusst nicht die rangbeste, sondern die zweitplatzierte Konfiguration 128-64-256-128 gewählt. Diese Entscheidung wird durch zwei Beobachtungen gestützt: Erstens ist der Unterschied in der Validierungsgüte zwischen beiden Kandidaten über alle fünf Metriken hinweg praktisch vernachlässigbar. Zweitens benötigt die gewählte Konfiguration mit rund 650.000 Parametern deutlich weniger als die Hälfte der Parameter der rangbesten Architektur, was das Risiko einer Überanpassung an streckenspezifische Eigenheiten der Trainingsdaten -- die zentrale, in Kapitel~\ref{sec:theoretische_grundlagen} formulierte Gefahr dieser Arbeit -- reduziert. Die Architektur 128-64-256-128 -- ein \gls{LSTM} mit vier Layern und den Hidden Sizes 128, 64, 256 und 128 -- bildet damit die Grundlage für den nachfolgenden Vergleich von Optimierer und Verlustfunktion in Abschnitt~\ref{subsec:optimizer_loss}.
 
 \subsection{Optimierer und Verlustfunktion}
 \label{subsec:optimizer_loss}
