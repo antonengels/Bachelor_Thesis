@@ -1,0 +1,15 @@
+# Data_prep - Python-Abhaengigkeiten
+# Installation: .venv\Scripts\python.exe -m pip install -r requirements.txt
+# Externe Voraussetzung: Wireshark/tshark >= 4.6 (aoecl-Dissector einkompiliert)
+
+# Kern (Datenverarbeitung)
+numpy==2.4.6
+pandas==3.0.3
+pyarrow==24.0.0          # Parquet-I/O (zstd)
+tqdm==4.68.3             # Fortschrittsbalken (extract_features)
+
+# EDA / Analyse
+scipy==1.18.0
+matplotlib==3.11.0
+seaborn==0.13.2
+plotly==6.8.0            # interaktive HTML-Plots im EDA-Report

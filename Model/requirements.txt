@@ -1,0 +1,14 @@
+# Python 3.14 (getestet mit 3.14.5), CPU-only
+# Installation:
+#   python -m venv .venv
+#   .\.venv\Scripts\Activate.ps1
+#   pip install -r requirements.txt
+#
+# Hinweis: torch als CPU-Build. Fuer eine andere Plattform/CUDA ggf. den
+# passenden Index verwenden: https://pytorch.org/get-started/locally/
+
+torch==2.13.0
+numpy==2.5.0
+pandas==3.0.3
+matplotlib==3.11.1
+pyarrow==24.0.0
